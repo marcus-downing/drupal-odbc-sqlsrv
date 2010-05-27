@@ -78,8 +78,50 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
 
   // TODO: implement the same for alter table and add/remove fields.
   public function createTable($name, $table) {
-    parent::createTable($name, $table);
+    // Reset the additional column information because the schema changed.
     $this->additionalColumnInformation = NULL;
+
+    if ($this->tableExists($name)) {
+      throw new DatabaseSchemaObjectExistsException(t('Table %name already exists.', array('%name' => $name)));
+    }
+
+    // Build the table and its unique keys in a transaction, and fail the whole
+    // creation in case of an error.
+    $transaction = db_transaction();
+    try {
+      $this->connection->query($this->createTableSql($name, $table));
+
+      if (isset($table['unique keys']) && is_array($table['unique keys'])) {
+        foreach ($table['unique keys'] as $key_name => $key) {
+          $this->connection->query($this->addUniqueKeySql($name, $key_name, $key));
+        }
+      }
+    }
+    catch (Exception $e) {
+      $transaction->rollback();
+      throw $e;
+    }
+
+    // Everything went well, commit the transaction.
+    unset($transaction);
+
+    // Create the indexes but ignore any error during the creation. We do that
+    // do avoid pulling the carpet under modules that try to implement indexes
+    // with invalid data types (long columns), before we come up with a better
+    // solution.
+    if (isset($table['indexes']) && is_array($table['indexes'])) {
+      foreach ($table['indexes'] as $key_name => $key) {
+        try {
+          $this->connection->query($this->createIndexSql($name, $key_name, $key));
+        }
+        catch (Exception $e) {
+          // Log the exception but do not rollback the transaction.
+          $error = _drupal_decode_exception($e);
+          watchdog('php', '%type: %message in %function (line %line of %file).', $error, $error['severity_level']);
+        }
+      }
+    }
+
   }
 
   public function tableExists($table) {
@@ -100,7 +142,7 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
    * @param $table
    *   A Schema API table definition array.
    * @return
-   *   An array of SQL statements to create the table.
+   *   The SQL statement to create the table.
    */
   protected function createTableSql($name, $table) {
     $sql_fields = array();
@@ -116,21 +158,7 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
     $sql = "CREATE TABLE [{" . $name . "}] (\n\t";
     $sql .= implode(",\n\t", $sql_fields);
     $sql .= "\n)";
-    $statements[] = $sql;
-
-    if (isset($table['unique keys']) && is_array($table['unique keys'])) {
-      foreach ($table['unique keys'] as $key_name => $key) {
-        $statements[] = $this->addUniqueKeySql($name, $key_name, $key);
-      }
-    }
-
-    if (isset($table['indexes']) && is_array($table['indexes'])) {
-      foreach ($table['indexes'] as $key_name => $key) {
-        $statements[] = $this->createIndexSql($name, $key_name, $key);
-      }
-    }
-
-    return $statements;
+    return $sql;
   }
 
   /**
