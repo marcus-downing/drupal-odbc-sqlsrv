@@ -71,10 +71,10 @@ IF OBJECT_ID (N'CONCAT', N'FN') IS NOT NULL BEGIN DROP FUNCTION CONCAT END
 EOF
       );
       db_query(<<< EOF
-CREATE FUNCTION CONCAT(@op1 sql_variant, @op2 sql_variant) RETURNS nvarchar(max) AS
+CREATE FUNCTION CONCAT(@op1 sql_variant, @op2 sql_variant) RETURNS nvarchar(4000) AS
 BEGIN
-  DECLARE @result nvarchar(max)
-  SET @result = CAST(@op1 AS nvarchar(max)) + CAST(@op2 AS nvarchar(max))
+  DECLARE @result nvarchar(4000)
+  SET @result = CAST(@op1 AS nvarchar(4000)) + CAST(@op2 AS nvarchar(4000))
   RETURN @result
 END
 EOF
