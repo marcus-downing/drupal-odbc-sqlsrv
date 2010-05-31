@@ -2,8 +2,12 @@
 
 class SelectQuery_sqlsrv extends SelectQuery {
   public function __toString() {
+
+    // Create a comments string to prepend to the query.
+    $comments = (!empty($this->comments)) ? '/* ' . implode('; ', $this->comments) . ' */ ' : '';
+
     // SELECT
-    $query = 'SELECT ';
+    $query = $comments . 'SELECT ';
     if ($this->distinct) {
       $query .= 'DISTINCT ';
     }
@@ -12,13 +16,13 @@ class SelectQuery_sqlsrv extends SelectQuery {
     $fields = array();
     foreach ($this->tables as $alias => $table) {
       if (!empty($table['all_fields'])) {
-        $fields[] = $alias . '.*';
+        $fields[] = $this->connection->escapeTable($alias) . '.*';
       }
     }
     foreach ($this->fields as $alias => $field) {
       // Always use the AS keyword for field aliases, as some
       // databases require it (e.g., PostgreSQL).
-      $fields[] = (isset($field['table']) ? $field['table'] . '.' : '') . $field['field'] . ' AS ' . $field['alias'];
+      $fields[] = (isset($field['table']) ? $this->connection->escapeTable($field['table']) . '.' : '') . $this->connection->escapeField($field['field']) . ' AS ' . $this->connection->escapeField($field['alias']);
     }
     foreach ($this->expressions as $alias => $expression) {
       $fields[] = $expression['expression'] . ' AS ' . $expression['alias'];
@@ -36,7 +40,10 @@ class SelectQuery_sqlsrv extends SelectQuery {
 
       // If the table is a subquery, compile it and integrate it into this query.
       if ($table['table'] instanceof SelectQueryInterface) {
-        $table_string = '(' . (string)$table['table'] . ')';
+        // Run preparation steps on this sub-query before converting to string.
+        $subquery = $table['table'];
+        $subquery->preExecute();
+        $table_string = '(' . (string) $subquery . ')';
       }
       else {
         $table_string = '{' . $this->connection->escapeTable($table['table']) . '}';
@@ -44,7 +51,7 @@ class SelectQuery_sqlsrv extends SelectQuery {
 
       // Don't use the AS keyword for table aliases, as some
       // databases don't support it (e.g., Oracle).
-      $query .=  $table_string . ' ' . $table['alias'];
+      $query .=  $table_string . ' ' . $this->connection->escapeTable($table['alias']);
 
       if (!empty($table['condition'])) {
         $query .= ' ON ' . $table['condition'];
@@ -113,22 +120,7 @@ class SelectQuery_sqlsrv extends SelectQuery {
       }
     }
 
-    $alias_candidate = $alias;
-    $count = 2;
-    while (!empty($this->tables[$alias_candidate])) {
-      $alias_candidate = $alias . '_' . $count++;
-    }
-    $alias = $alias_candidate;
-
-    $this->tables[$alias] = array(
-      'join type' => $type,
-      'table' => $table,
-      'alias' => $alias,
-      'condition' => $condition,
-      'arguments' => $arguments,
-    );
-
-    return $alias;
+    return parent::addJoin($type, $table, $alias, $condition, $arguments);
   }
 
   /**
