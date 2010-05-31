@@ -294,6 +294,8 @@ class DatabaseConnection_sqlsrv extends DatabaseConnection {
     $functions = array(
       'SUBSTRING_INDEX',
       'GREATEST',
+      'CONCAT',
+      'IF',
     );
     foreach ($functions as $function) {
       $query = preg_replace('/\b(?<!:)(' . preg_quote($function) . ')\b/i', 'dbo.$1', $query);
