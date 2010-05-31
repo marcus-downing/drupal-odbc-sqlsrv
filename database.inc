@@ -345,23 +345,15 @@ class DatabaseConnection_sqlsrv extends DatabaseConnection {
   }
 
   public function mapConditionOperator($operator) {
-    // We don't want to override any of the defaults.
+    // SQL Server doesn't need special escaping for the \ character in a string
+    // literal, because it uses '' to escape the single quote, not \'. Sadly
+    // PDO doesn't know that and interpret \' as an escaping character. We
+    // use a function call here to be safe.
     static $specials = array(
-      'LIKE' => array('postfix' => " ESCAPE '!'"),
-      'NOT LIKE' => array('postfix' => " ESCAPE '!'"),
+      'LIKE' => array('postfix' => " ESCAPE CHAR(92)"),
+      'NOT LIKE' => array('postfix' => " ESCAPE CHAR(92)"),
     );
     return isset($specials[$operator]) ? $specials[$operator] : NULL;
-  }
-
-  /**
-   * Temporary override of DatabaseConnection::escapeLike().
-   *
-   * There is a bug in the PDO_sqlsrv driver in which it fails to properly
-   * replace ESCAPE '\' statements.
-   */
-  public function escapeLike($string) {
-    // Use the '!' character instead of '\'
-    return str_replace(array('!', '%', '_'), array('!!', '!%', '!_'), $string);
   }
 
   /**
