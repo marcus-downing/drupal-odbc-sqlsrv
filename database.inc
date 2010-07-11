@@ -49,17 +49,18 @@ class DatabaseConnection_sqlsrv extends DatabaseConnection {
     // This driver defaults to transaction support, except if explicitly passed FALSE.
     $this->transactionSupport = !isset($connection_options['transactions']) || $connection_options['transactions'] !== FALSE;
 
+    // Build the DSN.
+    $options = array(
+      'Server=' . $connection_options['host'] . (!empty($connection_options['port']) ? ',' . $connection_options['port'] : ''),
+      'Database=' . $connection_options['database'],
+    );
+
     // Launch the connection to the server.
-    PDO::__construct('sqlsrv:' . $connection_options['host'], $connection_options['username'], $connection_options['password'], array(
-      'Database' => $connection_options['database'],
+    parent::__construct('sqlsrv:' . implode(';', $options), $connection_options['username'], $connection_options['password'], array(
+      PDO::SQLSRV_ATTR_DIRECT_QUERY => TRUE,
     ));
 
-    // Because the other methods don't seem to work right.
     $this->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    // Convert numeric values to strings when fetching.
-    $this->setAttribute(PDO::ATTR_STRINGIFY_FETCHES, TRUE);
-    // Force column names to lower case.
-    $this->setAttribute(PDO::ATTR_CASE, PDO::CASE_LOWER);
   }
 
   /**
@@ -157,8 +158,6 @@ class DatabaseConnection_sqlsrv extends DatabaseConnection {
    * @status tested
    */
   protected function prefixTablesCallback($matches) {
-    global $db_prefix;
-
     $table = $matches[1];
 
     // Don't prefix temporary tables.
@@ -167,19 +166,7 @@ class DatabaseConnection_sqlsrv extends DatabaseConnection {
     }
 
     // Else, do normal prefixing.
-    if (is_array($db_prefix)) {
-      if (isset($db_prefix[$table])) {
-        $prefix = $db_prefix[$table];
-      }
-      else {
-        $prefix = $db_prefix['default'];
-      }
-    }
-    else {
-      $prefix = $db_prefix;
-    }
-
-    return $prefix . $table;
+    return (isset($this->prefixes[$table]) ? $this->prefixes[$table] : $this->defaultPrefix) . $table;
   }
 
   public function quoteIdentifier($identifier) {
@@ -298,7 +285,7 @@ class DatabaseConnection_sqlsrv extends DatabaseConnection {
       'IF',
     );
     foreach ($functions as $function) {
-      $query = preg_replace('/\b(?<!:)(' . preg_quote($function) . ')\b/i', 'dbo.$1', $query);
+      $query = preg_replace('/\b(?<!:)(' . preg_quote($function) . ')\(/i', 'dbo.$1(', $query);
     }
 
     $replacements = array(
@@ -426,10 +413,12 @@ class DatabaseStatement_sqlsrv extends DatabaseStatementPrefetch implements Iter
     $this->rowCount = $statement->rowCount();
 
     // Bind the binary columns properly.
+    $null = array();
     for ($i = 0; $i < $statement->columnCount(); $i++) {
       $meta = $statement->getColumnMeta($i);
       if ($meta['sqlsrv:decl_type'] == 'varbinary') {
-        $statement->bindColumn($i + 1, $null, PDO::PARAM_LOB, 0, PDO::SQLSRV_ENCODING_BINARY);
+        $null[$i] = NULL;
+        $statement->bindColumn($i + 1, $null[$i], PDO::PARAM_LOB, 0, PDO::SQLSRV_ENCODING_BINARY);
       }
     }
 

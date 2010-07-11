@@ -35,8 +35,9 @@ class InsertQuery_sqlsrv extends InsertQuery {
 
       $stmt = $this->connection->PDOPrepare($this->connection->prefixTables((string) $this));
       // Handle the case of SELECT-based INSERT queries first.
-      foreach ($this->fromQuery->getArguments() as $key => $value) {
-        $stmt->bindParam($key, $value);
+      $values = $this->fromQuery->getArguments();
+      foreach ($values as $key => $value) {
+        $stmt->bindParam($key, $values[$key]);
       }
 
       try {
@@ -80,22 +81,22 @@ class InsertQuery_sqlsrv extends InsertQuery {
 
     // We use this array to store references to the blob handles.
     // This is necessary because the PDO will otherwise messes up with references.
-    $blobs = array();
+    $data_values = array();
 
-    foreach ($this->insertValues as $insert_values) {
+    foreach ($this->insertValues as $insert_index => $insert_values) {
       $max_placeholder = 0;
-      foreach ($this->insertFields as $idx => $field) {
+      foreach ($this->insertFields as $field_index => $field) {
         $placeholder = ':db_insert' . $max_placeholder++;
         if (isset($columnInformation['blobs'][$field])) {
-          $blob_handle = fopen('php://memory', 'a');
-          fwrite($blob_handle, $insert_values[$idx]);
-          rewind($blob_handle);
-          $blobs[$placeholder] = $blob_handle;
+          $data_values[$placeholder . $insert_index] = fopen('php://memory', 'a');
+          fwrite($data_values[$placeholder . $insert_index], $insert_values[$field_index]);
+          rewind($data_values[$placeholder . $insert_index]);
 
-          $stmt->bindParam($placeholder, $blobs[$placeholder], PDO::PARAM_LOB, 0, PDO::SQLSRV_ENCODING_BINARY);
+          $stmt->bindParam($placeholder, $data_values[$placeholder . $insert_index], PDO::PARAM_LOB, 0, PDO::SQLSRV_ENCODING_BINARY);
         }
         else {
-          $stmt->bindParam($placeholder, $insert_values[$idx]);
+          $data_values[$placeholder . $insert_index] = $insert_values[$field_index];
+          $stmt->bindParam($placeholder, $data_values[$placeholder . $insert_index]);
         }
       }
 
@@ -166,7 +167,7 @@ class UpdateQuery_sqlsrv extends UpdateQuery {
           // We assume that an expression will never happen on a BLOB field,
           // which is a fairly safe assumption to make since in most cases
           // it would be an invalid query anyway.
-          $stmt->bindParam($placeholder, $argument);
+          $stmt->bindParam($placeholder, $data['arguments'][$placeholder]);
         }
       }
       unset($fields[$field]);
@@ -177,7 +178,7 @@ class UpdateQuery_sqlsrv extends UpdateQuery {
     $blobs = array();
     $blob_count = 0;
 
-    foreach ($fields as $field => &$value) {
+    foreach ($fields as $field => $value) {
       $placeholder = ':db_update_placeholder_' . ($max_placeholder++);
 
       if (isset($columnInformation['blobs'][$field])) {
@@ -188,7 +189,7 @@ class UpdateQuery_sqlsrv extends UpdateQuery {
         $blob_count++;
       }
       else {
-        $stmt->bindParam($placeholder, $value);
+        $stmt->bindParam($placeholder, $fields[$field]);
       }
     }
 
@@ -196,8 +197,8 @@ class UpdateQuery_sqlsrv extends UpdateQuery {
       $this->condition->compile($this->connection, $this);
 
       $arguments = $this->condition->arguments();
-      foreach ($arguments as $placeholder => &$value) {
-        $stmt->bindParam($placeholder, $value);
+      foreach ($arguments as $placeholder => $value) {
+        $stmt->bindParam($placeholder, $arguments[$placeholder]);
       }
     }
 
@@ -244,6 +245,9 @@ class TruncateQuery_sqlsrv extends TruncateQuery {
   }
 }
 
+/**
+ * SQL Server-specific implementation of the MERGE operation.
+ */
 class MergeQuery_sqlsrv extends MergeQuery {
   public function execute() {
     // If validation fails, simply return NULL.
@@ -254,10 +258,6 @@ class MergeQuery_sqlsrv extends MergeQuery {
 
     // In the degenerate case of this query type, we have to run multiple
     // queries as there is no universal single-query mechanism that will work.
-    // Our degenerate case is not designed for performance efficiency but
-    // for comprehensibility. Any practical database driver will override
-    // this method with database-specific logic, so this function serves only
-    // as a fallback to aid developers of new drivers.
 
     // Wrap multiple queries in a transaction, if the database supports it.
     $transaction = $this->connection->startTransaction();
@@ -266,15 +266,37 @@ class MergeQuery_sqlsrv extends MergeQuery {
     $this->queryOptions['sqlsrv_skip_transactions'] = TRUE;
 
     try {
-      // Try to insert first.
-      $insert_fields = $this->insertFields + $this->keyFields;
-      $this->connection->insert($this->table, $this->queryOptions)
-        ->fields($insert_fields)
-        ->execute();
-      return MergeQuery::STATUS_INSERT;
-    }
-    catch (PDOException $e) {
-      // Or else update.
+      // Manually check if the record already exists.
+      $select = $this->connection->select($this->table);
+      $select->addExpression('1');
+      foreach ($this->keyFields as $field => $value) {
+        $select->condition($field, $value);
+      }
+
+      // Using SELECT FOR UPDATE syntax will lock the rows we want to attempt to update.
+      $sql = ((string) $select);
+      $arguments = $select->getArguments();
+
+      // If there are no existing records, run an insert query.
+      if (!$this->connection->query($sql, $arguments)->fetchField()) {
+        // If there is no existing record, run an insert query.
+        $insert_fields = $this->insertFields + $this->keyFields;
+        try {
+          $this->connection->insert($this->table, $this->queryOptions)->fields($insert_fields)->execute();
+          return MergeQuery::STATUS_INSERT;
+        }
+        catch (Exception $e) {
+          // The insert query failed, maybe it's because a racing insert query
+          // beat us in inserting the same row. Retry the select query, if it
+          // returns a row, ignore the error and continue with the update
+          // query below.
+          if (!$this->connection->query($sql, $arguments)->fetchField()) {
+            throw $e;
+          }
+        }
+      }
+
+      // Proceed with an update query if a row was found.
       if ($this->updateFields) {
         $update_fields = $this->updateFields;
       }
@@ -286,7 +308,7 @@ class MergeQuery_sqlsrv extends MergeQuery {
         }
       }
       if ($update_fields || $this->expressionFields) {
-        // Only run the update if there are no fields or expressions to update.
+        // Only run the update if there are fields or expressions to update.
         $update = $this->connection->update($this->table, $this->queryOptions)->fields($update_fields);
         foreach ($this->keyFields as $field => $value) {
           $update->condition($field, $value);
@@ -294,12 +316,16 @@ class MergeQuery_sqlsrv extends MergeQuery {
         foreach ($this->expressionFields as $field => $expression) {
           $update->expression($field, $expression['expression'], $expression['arguments']);
         }
-        $update->debug = TRUE;
         $update->execute();
         return MergeQuery::STATUS_UPDATE;
       }
     }
-
+    catch (Exception $e) {
+      // Something really wrong happened here, bubble up the exception to the
+      // caller.
+      $transaction->rollback();
+      throw $e;
+    }
     // Transaction commits here where $transaction looses scope.
   }
 }

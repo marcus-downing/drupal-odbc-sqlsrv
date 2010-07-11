@@ -14,35 +14,9 @@
 class DatabaseSchema_sqlsrv extends DatabaseSchema {
 
   /**
-   * Expand a Drupal table name to database, schema and table.
+   * Default schema for SQL Server databases.
    */
-  protected function expandTableName($table_name) {
-    $info = $this->connection->getConnectionOptions();
-
-    // The table name may describe the schema eg. schema.table.
-    if (strpos($table_name, '.')) {
-      list($schema, $table_name) = explode('.', $table_name);
-    }
-    else {
-      $schema = 'dbo';
-    }
-
-    return array(
-      'database' => $info['database'],
-      'schema' => $schema,
-      'table' => $table_name,
-    );
-  }
-
-  protected function buildTableNameCondition($table_name, $operator = '=') {
-    $table_info = $this->expandTableName($table_name);
-
-    $condition = new DatabaseCondition('AND');
-    $condition->condition('table_catalog', $table_info['database']);
-    $condition->condition('table_schema', $table_info['schema']);
-    $condition->condition('table_name', $table_info['table'], $operator);
-    return $condition;
-  }
+  protected $defaultSchema = 'dbo';
 
   protected $additionalColumnInformation = NULL;
 
@@ -87,7 +61,7 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
 
     // Build the table and its unique keys in a transaction, and fail the whole
     // creation in case of an error.
-    $transaction = db_transaction();
+    $transaction = $this->connection->startTransaction();
     try {
       $this->connection->query($this->createTableSql($name, $table));
 
@@ -311,8 +285,8 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
       throw new DatabaseSchemaObjectExistsException(t("Cannot rename %table to %table_new: table %table_new already exists.", array('%table' => $table, '%table_new' => $new_name)));
     }
 
-    $old_table_info = $this->expandTableName($this->connection->prefixTables('{' . $table . '}'));
-    $new_table_info = $this->expandTableName($this->connection->prefixTables('{' . $new_name . '}'));
+    $old_table_info = $this->getPrefixInfo($table);
+    $new_table_info = $this->getPrefixInfo($new_name);
 
     $this->connection->query('EXEC sp_rename :old, :new', array(
       ':old' => $old_table_info['schema'] . '.' . $old_table_info['table'],

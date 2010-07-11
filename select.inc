@@ -62,7 +62,7 @@ class SelectQuery_sqlsrv extends SelectQuery {
     if (count($this->where)) {
       $this->where->compile($this->connection, $this);
       // There is an implicit string cast on $this->condition.
-      $query .= "\nWHERE " . $this->where;
+      $query .= "\nWHERE ( " . $this->where . " )";
     }
 
     // GROUP BY
@@ -101,26 +101,6 @@ class SelectQuery_sqlsrv extends SelectQuery {
     }
 
     return $query;
-  }
-
-  /**
-   * Temporary override of SelectQuery::addJoin().
-   *
-   * Sanitize the alias.
-   */
-  public function addJoin($type, $table, $alias = NULL, $condition = NULL, $arguments = array()) {
-    if (empty($alias)) {
-      if ($table instanceof SelectQueryInterface) {
-        $alias = 'subquery';
-      }
-      else {
-        // Do not use DatabaseConnection::escapeTable() here: we don't want
-        // the # prefix to get thru.
-        $alias = preg_replace('/[^A-Za-z0-9_.]+/', '', $table);
-      }
-    }
-
-    return parent::addJoin($type, $table, $alias, $condition, $arguments);
   }
 
   /**
