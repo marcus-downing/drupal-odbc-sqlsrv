@@ -126,7 +126,7 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
 
     $sql_keys = array();
     if (isset($table['primary key']) && is_array($table['primary key'])) {
-      $sql_fields[] = 'CONSTRAINT {' . $name . '}_pkey PRIMARY KEY NONCLUSTERED (' . implode(', ', $this->connection->quoteIdentifiers($table['primary key'])) . ')';
+      $sql_fields[] = 'CONSTRAINT {' . $name . '}_pkey PRIMARY KEY CLUSTERED (' . implode(', ', $this->connection->quoteIdentifiers($table['primary key'])) . ')';
     }
 
     $sql = "CREATE TABLE [{" . $name . "}] (\n\t";
