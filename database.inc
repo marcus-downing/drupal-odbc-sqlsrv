@@ -116,9 +116,13 @@ class DatabaseConnection_sqlsrv extends DatabaseConnection {
    * with LIKE xxx ESCAPE yyy syntax.
    */
   const RESERVED_REGEXP = '/\G 
+    # Everything that follows a boundary that is not : or _.
     \b(?<![:\[_])(?:
+      # Any reserved words, followed by a boundary that is not an opening parenthesis.
       (action|admin|alias|any|are|array|at|begin|boolean|class|commit|contains|current|data|date|day|depth|domain|external|file|full|function|get|go|host|input|language|last|less|local|map|min|module|new|no|object|old|open|operation|parameter|parameters|path|plan|prefix|proc|public|ref|result|returns|role|row|rows|save|search|second|section|session|size|state|statistics|temporary|than|time|timestamp|tran|translate|translation|trim|user|value|variable|view|without)
+      (?!\()
       |
+      # Or a normal word.
       ([a-z]+)
     )\b
     |
@@ -269,7 +273,7 @@ class DatabaseConnection_sqlsrv extends DatabaseConnection {
   /**
    * Internal function: massage a query to make it compliant with SQL Server.
    */
-  protected function preprocessQuery($query) {
+  public function preprocessQuery($query) {
     // Force quotes around some SQL Server reserved keywords.
     if (preg_match('/^SELECT/', $query)) {
       $query = preg_replace_callback(self::RESERVED_REGEXP, array($this, 'replaceReservedCallback'), $query);
@@ -293,7 +297,7 @@ class DatabaseConnection_sqlsrv extends DatabaseConnection {
       'IF',
     );
     foreach ($functions as $function) {
-      $query = preg_replace('/\b(?<!:)(' . preg_quote($function) . ')\(/i', 'dbo.$1(', $query);
+      $query = preg_replace('/\b(?<![:.])(' . preg_quote($function) . ')\(/i', 'dbo.$1(', $query);
     }
 
     $replacements = array(
@@ -301,7 +305,7 @@ class DatabaseConnection_sqlsrv extends DatabaseConnection {
       'POW' => 'POWER',
     );
     foreach ($replacements as $function => $replacement) {
-      $query = preg_replace('/\b(?<!:)(' . preg_quote($function) . ')\(/i', $replacement . '(', $query);
+      $query = preg_replace('/\b(?<![:.])(' . preg_quote($function) . ')\(/i', $replacement . '(', $query);
     }
 
     // Replace the ANSI concatenation operator with SQL Server poor one.
