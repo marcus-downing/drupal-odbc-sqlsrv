@@ -250,82 +250,9 @@ class TruncateQuery_sqlsrv extends TruncateQuery {
  */
 class MergeQuery_sqlsrv extends MergeQuery {
   public function execute() {
-    // If validation fails, simply return NULL.
-    // Note that validation routines in preExecute() may throw exceptions instead.
-    if (!$this->preExecute()) {
-      return NULL;
-    }
-
-    // In the degenerate case of this query type, we have to run multiple
-    // queries as there is no universal single-query mechanism that will work.
-
-    // Wrap multiple queries in a transaction, if the database supports it.
-    $transaction = $this->connection->startTransaction();
-
     // We don't need INSERT or UPDATE queries to trigger additional transactions.
     $this->queryOptions['sqlsrv_skip_transactions'] = TRUE;
 
-    try {
-      // Manually check if the record already exists.
-      $select = $this->connection->select($this->table);
-      $select->addExpression('1');
-      foreach ($this->keyFields as $field => $value) {
-        $select->condition($field, $value);
-      }
-
-      // Using SELECT FOR UPDATE syntax will lock the rows we want to attempt to update.
-      $sql = ((string) $select);
-      $arguments = $select->getArguments();
-
-      // If there are no existing records, run an insert query.
-      if (!$this->connection->query($sql, $arguments)->fetchField()) {
-        // If there is no existing record, run an insert query.
-        $insert_fields = $this->insertFields + $this->keyFields;
-        try {
-          $this->connection->insert($this->table, $this->queryOptions)->fields($insert_fields)->execute();
-          return MergeQuery::STATUS_INSERT;
-        }
-        catch (Exception $e) {
-          // The insert query failed, maybe it's because a racing insert query
-          // beat us in inserting the same row. Retry the select query, if it
-          // returns a row, ignore the error and continue with the update
-          // query below.
-          if (!$this->connection->query($sql, $arguments)->fetchField()) {
-            throw $e;
-          }
-        }
-      }
-
-      // Proceed with an update query if a row was found.
-      if ($this->updateFields) {
-        $update_fields = $this->updateFields;
-      }
-      else {
-        $update_fields = $this->insertFields;
-        // If there are no exclude fields, this is a no-op.
-        foreach ($this->excludeFields as $exclude_field) {
-          unset($update_fields[$exclude_field]);
-        }
-      }
-      if ($update_fields || $this->expressionFields) {
-        // Only run the update if there are fields or expressions to update.
-        $update = $this->connection->update($this->table, $this->queryOptions)->fields($update_fields);
-        foreach ($this->keyFields as $field => $value) {
-          $update->condition($field, $value);
-        }
-        foreach ($this->expressionFields as $field => $expression) {
-          $update->expression($field, $expression['expression'], $expression['arguments']);
-        }
-        $update->execute();
-        return MergeQuery::STATUS_UPDATE;
-      }
-    }
-    catch (Exception $e) {
-      // Something really wrong happened here, bubble up the exception to the
-      // caller.
-      $transaction->rollback();
-      throw $e;
-    }
-    // Transaction commits here where $transaction looses scope.
+    return parent::execute();
   }
 }
