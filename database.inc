@@ -483,3 +483,10 @@ class DatabaseStatement_sqlsrv extends DatabaseStatementPrefetch implements Iter
 /**
  * @} End of "ingroup database".
  */
+
+/**
+ * Workaround a bug in the database autoloader by defining all the child classes.
+ *
+ * @see http://drupal.org/node/851136
+ */
+class DatabaseTransaction_sqlsrv extends DatabaseTransaction { }
