@@ -455,22 +455,25 @@ class DatabaseStatement_sqlsrv extends DatabaseStatementPrefetch implements Iter
       $logger->log($this, $args, $query_end - $query_start);
     }
 
-    // Remove the _line2 and _line3 internal columns from the result set.
-    $drop_columns = FALSE;
+    // Remove technical columns from the final result set.
+    $droppable_columns = array_flip(isset($options['sqlsrv_drop_columns']) ? $options['sqlsrv_drop_columns'] : array());
+    $droppable_columns += array('_line2' => TRUE, '_line3' => TRUE);
+    $dropped_columns = array();
     foreach ($this->columnNames as $k => $column) {
-      if ($column == '_line2' || $column == '_line3') {
-        $drop_columns = TRUE;
+      if (isset($droppable_columns[$column])) {
+        $dropped_columns[] = $column;
         unset($this->columnNames[$k]);
       }
     }
 
-    if ($drop_columns) {
+    if ($dropped_columns) {
       // Renumber columns.
       $this->columnNames = array_values($this->columnNames);
 
       foreach ($this->data as $k => $row) {
-        unset($this->data[$k]['_line2']);
-        unset($this->data[$k]['_line3']);
+        foreach ($dropped_columns as $column) {
+          unset($this->data[$k][$column]);
+        }
       }
     }
 

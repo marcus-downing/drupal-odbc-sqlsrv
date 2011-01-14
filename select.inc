@@ -1,6 +1,40 @@
 <?php
 
 class SelectQuery_sqlsrv extends SelectQuery {
+
+  /**
+   * Override for SelectQuery::execute().
+   *
+   * Ensure that all the fields in ORDER BY and GROUP BY are part of the
+   * main query.
+   */
+  public function execute() {
+    // If validation fails, simply return NULL.
+    // Note that validation routines in preExecute() may throw exceptions instead.
+    if (!$this->preExecute()) {
+      return NULL;
+    }
+
+    $counter = 0;
+
+    if ($this->distinct || $this->group) {
+      // When the query is DISTINCT or contains GROUP BY fields, all the fields
+      // in the GROUP BY and ORDER BY clauses must appear in the returned
+      // columns.
+      $columns = $this->order + array_flip($this->group);
+      foreach ($columns as $field => $dummy) {
+        if (!isset($this->fields[$field]) && !isset($this->expressions[$field])) {
+          $alias = '_field_' . ($counter++);
+          $this->addExpression($field, $alias);
+          $this->queryOptions['sqlsrv_drop_columns'][] = $alias;
+        }
+      }
+    }
+
+    $args = $this->getArguments();
+    return $this->connection->query((string) $this, $args, $this->queryOptions);
+  }
+
   public function __toString() {
 
     // Create a comments string to prepend to the query.
@@ -28,7 +62,6 @@ class SelectQuery_sqlsrv extends SelectQuery {
       $fields[] = $expression['expression'] . ' AS ' . $expression['alias'];
     }
     $query .= implode(', ', $fields);
-
 
     // FROM - We presume all queries have a FROM, as any query that doesn't won't need the query builder anyway.
     $query .= "\nFROM ";
