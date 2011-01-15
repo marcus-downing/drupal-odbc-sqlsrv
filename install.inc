@@ -98,7 +98,6 @@ EOF
       );
     }
     catch (Exception $e) {
-      print_r($e);
       $this->fail(st('Drupal could not be correctly setup with the existing database. Revise any errors.'));
     }
   }
