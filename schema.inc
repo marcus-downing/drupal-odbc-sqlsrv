@@ -67,7 +67,7 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
 
       if (isset($table['unique keys']) && is_array($table['unique keys'])) {
         foreach ($table['unique keys'] as $key_name => $key) {
-          $this->connection->query($this->addUniqueKeySql($name, $key_name, $key));
+          $this->addUniqueKey($name, $key_name, $key);
         }
       }
     }
@@ -568,24 +568,6 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
   }
 
   /**
-   * Build the SQL for the creation of an unique key.
-   *
-   * @status tested
-   */
-  protected function addUniqueKeySql($table, $name, $fields) {
-    // Build a condition.
-    $conditions = array();
-    foreach ($fields as $field) {
-      if (is_array($field)) {
-        $field = $field[0];
-      }
-      $conditions[] = '[' . $field . '] IS NOT NULL';
-    }
-
-    return 'CREATE UNIQUE INDEX ' . $name . '_unique ON [{' . $table . '}] (' . $this->createKeySql($fields) . ') WHERE ' . implode(' AND ', $conditions);
-  }
-
-  /**
    * Override DatabaseSchema::addUniqueKey().
    *
    * @status tested
@@ -598,9 +580,29 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
       throw new DatabaseSchemaObjectExistsException(t("Cannot add unique key %name to table %table: unique key already exists.", array('%table' => $table, '%name' => $name)));
     }
 
-    echo $this->addUniqueKeySql($table, $name, $fields);
+    // First, build a GUID key for the table if necessary.
+    if (!$this->fieldExists($table, '__pk')) {
+      $this->connection->query('ALTER TABLE {' . $table . '} ADD __pk UNIQUEIDENTIFIER DEFAULT NEWID()');
+    }
 
-    $this->connection->query($this->addUniqueKeySql($table, $name, $fields));
+    // Then, build a expression based on the columns.
+    $column_expression = array();
+    foreach ($fields as $field) {
+      if (is_array($field)) {
+        $column_expression[] = 'SUBSTRING(CAST(' . $field[0] . ' AS varbinary),1,' . $field[1] . ')';
+      }
+      else {
+        $column_expression[] = 'CAST(' . $field . ' AS varbinary)';
+      }
+    }
+    $column_expression = implode(' + ', $column_expression);
+
+    // Build a computed column based on the expression that replaces NULL
+    // values with the globally unique identifier generated previously.
+    // This is (very) unlikely to result in a collision with any actual value
+    // in the columns of the unique key.
+    $this->connection->query('ALTER TABLE {' . $table . '} ADD __unique_' . $name . " AS CAST(HashBytes('MD4', COALESCE(" . $column_expression . ", CAST(__pk AS varbinary))) AS varbinary(16))");
+    $this->connection->query('CREATE UNIQUE INDEX ' . $name . '_unique ON [{' . $table . '}] (__unique_' . $name . ')');
   }
 
   /**
@@ -614,6 +616,14 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
     }
 
     $this->connection->query('DROP INDEX ' . $name . '_unique ON [{' . $table . '}]');
+    $this->connection->query('ALTER TABLE [{' . $table . '}] DROP COLUMN __unique_' . $name);
+
+    // Get the number of remaining unique indexes on the table, and prune
+    // the technical primary key if possible.
+    $unique_indexes = $this->connection->query('SELECT COUNT(*) FROM sys.indexes WHERE object_id = OBJECT_ID(:table) AND is_unique = 1', array(':table' => $this->connection->prefixTables('{' . $table . '}')))->fetchField();
+    if (!$unique_indexes) {
+      $this->dropField($table, '__pk');
+    }
   }
 
   /**

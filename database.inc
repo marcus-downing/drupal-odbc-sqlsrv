@@ -333,11 +333,11 @@ class DatabaseConnection_sqlsrv extends DatabaseConnection {
       $query = preg_replace('/^\s*SELECT(\s*DISTINCT)?/Dsi', 'SELECT$1 TOP(' . ($from + $count) . ') ', $query);  
       $query = '
         SELECT * FROM (
-          SELECT sub2.*, ROW_NUMBER() OVER(ORDER BY sub2._line2) AS _line3 FROM (
-            SELECT 1 AS _line2, sub1.* FROM (' . $query . ') AS sub1
+          SELECT sub2.*, ROW_NUMBER() OVER(ORDER BY sub2.__line2) AS __line3 FROM (
+            SELECT 1 AS __line2, sub1.* FROM (' . $query . ') AS sub1
           ) as sub2
         ) AS sub3 
-        WHERE _line3 BETWEEN ' . ($from + 1) . ' AND ' . ($from + $count);
+        WHERE __line3 BETWEEN ' . ($from + 1) . ' AND ' . ($from + $count);
     }
 
     return $query;
@@ -457,10 +457,9 @@ class DatabaseStatement_sqlsrv extends DatabaseStatementPrefetch implements Iter
 
     // Remove technical columns from the final result set.
     $droppable_columns = array_flip(isset($options['sqlsrv_drop_columns']) ? $options['sqlsrv_drop_columns'] : array());
-    $droppable_columns += array('_line2' => TRUE, '_line3' => TRUE);
     $dropped_columns = array();
     foreach ($this->columnNames as $k => $column) {
-      if (isset($droppable_columns[$column])) {
+      if (substr($column, 0, 2) == '__' || isset($droppable_columns[$column])) {
         $dropped_columns[] = $column;
         unset($this->columnNames[$k]);
       }
