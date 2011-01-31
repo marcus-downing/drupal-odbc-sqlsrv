@@ -34,19 +34,19 @@ BEGIN
   DECLARE @result varchar(8000)
   DECLARE @end int
   DECLARE @part int
-  SET @end = 1
+  SET @end = 0
   SET @part = 0
   WHILE (@part < @count)
   BEGIN
     SET @end = CHARINDEX(@delimiter, @string, @end + 1)
     IF (@end = 0)
     BEGIN
-      SET @end = LEN(@string)
+      SET @end = LEN(@string) + 1
       BREAK
     END
-    SET @count = @count + 1
+    SET @part = @part + 1
   END
-  SET @result = SUBSTRING(@string, 1, @end)
+  SET @result = SUBSTRING(@string, 1, @end - 1)
   RETURN @result
 END
 EOF
