@@ -3,12 +3,19 @@
 // Microsoft SQL Server specific install functions
 
 class DatabaseTasks_sqlsrv extends DatabaseTasks {
+
   protected $pdoDriver = 'sqlsrv';
+
   public function name() {
     return 'Microsoft SQL Server';
   }
 
   public function __construct() {
+    // Core tasks are using a table without primary key, they need to be
+    // completely rewritten.
+    $this->tasks = array();
+
+    // Create the user-defined functions we need to be Drupal friendly.
     $this->tasks[] = array(
       'function' => 'initializeDatabase',
       'arguments' => array(),
