@@ -89,8 +89,7 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
         }
         catch (Exception $e) {
           // Log the exception but do not rollback the transaction.
-          $error = _drupal_decode_exception($e);
-          watchdog('php', '%type: %message in %function (line %line of %file).', $error, $error['severity_level']);
+          watchdog_exception('database', $e);
         }
       }
     }
