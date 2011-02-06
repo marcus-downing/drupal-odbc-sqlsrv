@@ -288,6 +288,11 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
     $old_table_info = $this->getPrefixInfo($table);
     $new_table_info = $this->getPrefixInfo($new_name);
 
+    // We don't support renaming tables across schemas (yet).
+    if ($old_table_info['schema'] != $new_table_info['schema']) {
+      throw new PDOException(t('Cannot rename a table across schema.'));
+    }
+
     $this->connection->query('EXEC sp_rename :old, :new', array(
       ':old' => $old_table_info['schema'] . '.' . $old_table_info['table'],
       ':new' => $new_table_info['table'],
@@ -296,15 +301,15 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
     // Constraint names are global in SQL Server, so we need to rename them
     // when renaming the table. For some strange reason, indexes are local to
     // a table.
-    $condition = $this->buildTableNameCondition($this->connection->prefixTables('{' . $new_name . '}'));
-    $condition->compile($this->connection, $this);
-    $columns = $this->connection->query('SELECT column_name FROM information_schema.columns WHERE column_default IS NOT NULL AND ' . (string) $condition, $condition->arguments());
-    foreach ($columns as $column) {
-      $this->connection->query('EXEC sp_rename :old, :new, :type', array(
-        ':old' => $old_table_info['schema'] . '.' . $old_table_info['table'] . '_' . $column->column_name . '_df',
-        ':new' => $new_table_info['table'] . '_' . $column->column_name . '_df',
-        ':type' => 'OBJECT',
-      ));
+    $objects = $this->connection->query('SELECT name FROM sys.objects WHERE parent_object_id = OBJECT_ID(:table)', array(':table' => $new_table_info['schema'] . '.' . $new_table_info['table']));
+    foreach ($objects as $object) {
+      if (preg_match('/^' . preg_quote($old_table_info['table']) . '_(.*)$/', $object->name, $matches)) {
+        $this->connection->query('EXEC sp_rename :old, :new, :type', array(
+          ':old' => $old_table_info['schema'] . '.' . $object->name,
+          ':new' => $new_table_info['table'] . '_' . $matches[1],
+          ':type' => 'OBJECT',
+        ));
+      }
     }
   }
 
