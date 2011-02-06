@@ -184,6 +184,10 @@ class DatabaseConnection_sqlsrv extends DatabaseConnection {
     return '[' . $identifier .']';
   }
 
+  public function escapeField($field) {
+    return implode('.', array_map(array($this, 'quoteIdentifier'), explode('.', preg_replace('/[^A-Za-z0-9_.]+/', '', $field))));
+  }
+
   public function quoteIdentifiers($identifiers) {
     return array_map(array($this, 'quoteIdentifier'), $identifiers);;
   }

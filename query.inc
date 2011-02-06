@@ -146,8 +146,93 @@ class InsertQuery_sqlsrv extends InsertQuery {
   }
 }
 
+/**
+ * SQL Server-specific implementation of UPDATE.
+ *
+ * The specific parts are:
+ *  - SQL Server returns the number of matched rows to an UPDATE, and Drupal
+ *    requires the number of affected rows to be returned.
+ *  - SQL Server requires a special handling for the blobs.
+ */
 class UpdateQuery_sqlsrv extends UpdateQuery {
+  /**
+   * Helper function that removes the fields that are already in a condition.
+   *
+   * @param $fields
+   *   The fields.
+   * @param QueryConditionInterface $condition
+   *   A database condition.
+   */
+  protected function removeFieldsInCondition(&$fields, QueryConditionInterface $condition) {
+    foreach ($condition->conditions() as $child_condition) {
+      if ($child_condition['field'] instanceof QueryConditionInterface) {
+        $this->removeFieldsInCondition($fields, $child_condition['field']);
+      }
+      else {
+        unset($fields[$child_condition['field']]);
+      }
+    }
+  }
+
+  /**
+   * Rewrite the query not to select non-affected rows.
+   *
+   * A query like this one:
+   *   UPDATE test SET name = 'newname' WHERE tid = 1
+   * will become:
+   *   UPDATE test SET name = 'newname' WHERE tid = 1 AND name <> 'newname'
+   */
+  protected function excludeNonAffectedRows() {
+    if (!empty($this->queryOptions['sqlsrv_return_matched_rows'])) {
+      return;
+    }
+
+    // Get the fields used in the update query, and remove those that are already
+    // in the condition.
+    $fields = $this->expressionFields + $this->fields;
+    $this->removeFieldsInCondition($fields, $this->condition);
+
+    // Add the inverse of the fields to the condition.
+    $condition = new DatabaseCondition('OR');
+    foreach ($fields as $field => $data) {
+      if (is_array($data)) {
+        // The field is an expression.
+        // Re-bind the placeholders.
+        $expression = $data['expression'];
+        $arguments = array();
+        if (!empty($data['arguments'])) {
+          foreach ($data['arguments'] as $placeholder => $value) {
+            $new_placeholder = ':db_exclude_placeholder_' . $this->nextPlaceholder();
+            $expression = str_replace($placeholder, $new_placeholder, $expression);
+            $arguments[$new_placeholder] = $value;
+          }
+        }
+        $condition->where($field . ' <> ' . $expression, $arguments);
+        $condition->isNull($field);
+      }
+      elseif (!isset($data)) {
+        // The field will be set to NULL.
+        $condition->isNull($field);
+      }
+      else {
+        $condition->condition($field, $data, '<>');
+        $condition->isNull($field);
+      }
+    }
+    if (count($condition)) {
+      // Workaround for a bug in the base MergeQuery implementation:
+      // a DatabaseCondition object is reused without being re-compiled,
+      // leading to duplicate placeholders.
+      $this->nextPlaceholder = 1000000;
+      $this->condition($condition);
+    }
+  }
+
   public function execute() {
+    // Rewrite the query to exclude the non-affected rows.
+    $this->excludeNonAffectedRows();
+
+    // Now perform the special handling for BLOB fields.
     $max_placeholder = 0;
 
     // Because we filter $fields the same way here and in __toString(), the
