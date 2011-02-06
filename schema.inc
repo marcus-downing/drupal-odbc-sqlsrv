@@ -589,10 +589,10 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
     $column_expression = array();
     foreach ($fields as $field) {
       if (is_array($field)) {
-        $column_expression[] = 'SUBSTRING(CAST(' . $field[0] . ' AS varbinary),1,' . $field[1] . ')';
+        $column_expression[] = 'SUBSTRING(CAST(' . $field[0] . ' AS varbinary(max)),1,' . $field[1] . ')';
       }
       else {
-        $column_expression[] = 'CAST(' . $field . ' AS varbinary)';
+        $column_expression[] = 'CAST(' . $field . ' AS varbinary(max))';
       }
     }
     $column_expression = implode(' + ', $column_expression);
@@ -601,7 +601,7 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
     // values with the globally unique identifier generated previously.
     // This is (very) unlikely to result in a collision with any actual value
     // in the columns of the unique key.
-    $this->connection->query('ALTER TABLE {' . $table . '} ADD __unique_' . $name . " AS CAST(HashBytes('MD4', COALESCE(" . $column_expression . ", CAST(__pk AS varbinary))) AS varbinary(16))");
+    $this->connection->query('ALTER TABLE {' . $table . '} ADD __unique_' . $name . " AS CAST(HashBytes('MD4', COALESCE(" . $column_expression . ", CAST(__pk AS varbinary(max)))) AS varbinary(16))");
     $this->connection->query('CREATE UNIQUE INDEX ' . $name . '_unique ON [{' . $table . '}] (__unique_' . $name . ')');
   }
 
