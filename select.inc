@@ -3,25 +3,31 @@
 class SelectQuery_sqlsrv extends SelectQuery {
 
   /**
-   * Override for SelectQuery::execute().
+   * Override for SelectQuery::preExecute().
    *
    * Ensure that all the fields in ORDER BY and GROUP BY are part of the
    * main query.
    */
-  public function execute() {
-    // If validation fails, simply return NULL.
-    // Note that validation routines in preExecute() may throw exceptions instead.
-    if (!$this->preExecute()) {
-      return NULL;
+  public function preExecute(SelectQueryInterface $query = NULL) {
+    // If no query object is passed in, use $this.
+    if (!isset($query)) {
+     $query = $this;
     }
 
-    $counter = 0;
+    // Only execute this once.
+    if ($this->isPrepared()) {
+     return TRUE;
+    }
+
+    // Execute standard pre-execution first.
+    parent::preExecute($query);
 
     if ($this->distinct || $this->group) {
       // When the query is DISTINCT or contains GROUP BY fields, all the fields
       // in the GROUP BY and ORDER BY clauses must appear in the returned
       // columns.
       $columns = $this->order + array_flip($this->group);
+      $counter = 0;
       foreach ($columns as $field => $dummy) {
         if (!isset($this->fields[$field]) && !isset($this->expressions[$field])) {
           $alias = '_field_' . ($counter++);
@@ -29,10 +35,24 @@ class SelectQuery_sqlsrv extends SelectQuery {
           $this->queryOptions['sqlsrv_drop_columns'][] = $alias;
         }
       }
+
+      // More over, GROUP BY columns cannot use aliases, so expand them to
+      // their full expressions.
+      foreach ($this->group as $key => &$group_field) {
+        // Expand an alias on a field.
+        if (isset($this->fields[$group_field])) {
+          $field = $this->fields[$group_field];
+          $group_field = (isset($field['table']) ? $this->connection->escapeTable($field['table']) . '.' : '') . $this->connection->escapeField($field['field']);
+        }
+        // Expand an alias on an expression.
+        else if (isset($this->expressions[$group_field])) {
+          $expression = $this->expressions[$group_field];
+          $group_field = $expression['expression'];
+        }
+      }
     }
 
-    $args = $this->getArguments();
-    return $this->connection->query((string) $this, $args, $this->queryOptions);
+    return $this->prepared;
   }
 
   public function __toString() {
