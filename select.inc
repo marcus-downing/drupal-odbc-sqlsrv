@@ -55,8 +55,17 @@ class SelectQuery_sqlsrv extends SelectQuery {
     return $this->prepared;
   }
 
-  public function __toString() {
+  /**
+   * Override for SelectQuery::getArguments().
+   *
+   * Detect when this query is prepared for use in a sub-query.
+   */
+  public function getArguments(QueryPlaceholderInterface $queryPlaceholder = NULL) {
+    $this->inSubQuery = isset($queryPlaceholder) && ($queryPlaceholder != $this);
+    return parent::getArguments($queryPlaceholder);
+  }
 
+  public function __toString() {
     // Create a comments string to prepend to the query.
     $comments = (!empty($this->comments)) ? '/* ' . implode('; ', $this->comments) . ' */ ' : '';
 
@@ -131,7 +140,10 @@ class SelectQuery_sqlsrv extends SelectQuery {
     }
 
     // ORDER BY
-    if ($this->order) {
+    // The ORDER BY clause is invalid in views, inline functions, derived
+    // tables, subqueries, and common table expressions, unless TOP or FOR XML
+    // is also specified.
+    if ($this->order && (empty($this->inSubQuery) || !empty($this->range))) {
       $query .= "\nORDER BY ";
       $fields = array();
       foreach ($this->order as $field => $direction) {

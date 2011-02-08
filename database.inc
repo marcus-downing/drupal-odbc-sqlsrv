@@ -185,7 +185,12 @@ class DatabaseConnection_sqlsrv extends DatabaseConnection {
   }
 
   public function escapeField($field) {
-    return implode('.', array_map(array($this, 'quoteIdentifier'), explode('.', preg_replace('/[^A-Za-z0-9_.]+/', '', $field))));
+    if (strlen($field) > 0) {
+      return implode('.', array_map(array($this, 'quoteIdentifier'), explode('.', preg_replace('/[^A-Za-z0-9_.]+/', '', $field))));
+    }
+    else {
+      return '';
+    }
   }
 
   public function quoteIdentifiers($identifiers) {
