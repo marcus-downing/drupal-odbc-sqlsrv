@@ -325,6 +325,16 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
     return TRUE;
   }
 
+  public function fieldExists($table, $field) {
+    try {
+      $this->connection->query('SELECT TOP(1) [' . $field . '] FROM {' . $table . '}');
+      return TRUE;
+    }
+    catch (PDOException $e) {
+      return FALSE;
+    }
+  }
+
   /**
    * Override DatabaseSchema::addField().
    *
