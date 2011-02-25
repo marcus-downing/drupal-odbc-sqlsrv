@@ -1,5 +1,4 @@
 <?php
-// $Id$
 
 /**
  * SQL Server-specific implementation of INSERT.

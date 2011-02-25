@@ -1,5 +1,4 @@
 <?php
-// $Id$
 
 // Microsoft SQL Server specific install functions
 
