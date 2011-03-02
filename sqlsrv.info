@@ -8,4 +8,4 @@ required = TRUE
 hidden = TRUE
 
 ; Tests
-files[] = tests/sqlsrv.test
+files[] = tests/sqlsrv.schema.test

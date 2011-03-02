@@ -1,0 +1,55 @@
+<?php
+
+/**
+ * @file
+ * Support tests for SQL Server.
+ */
+
+class SqlServerSchemaTest extends DrupalWebTestCase {
+  public static function getInfo() {
+    return array(
+      'name' => 'Schema tests',
+      'description' => 'Generic tests for SQL Server Schema.',
+      'group' => 'Database (SQL Server)'
+    );
+  }
+
+  public function testPrimaryKeyHandling() {
+    $table_spec = array(
+      'fields' => array(
+        'id'  => array(
+          'type' => 'int',
+          'not null' => TRUE,
+        ),
+      ),
+    );
+
+    db_create_table('test_table', $table_spec);
+    $this->assertTrue(db_table_exists('test_table'), t('Creating a table without a primary key works.'));
+
+    db_add_primary_key('test_table', array('id'));
+    $this->pass(t('Adding a primary key should work when the table has no data.'));
+
+    // Try adding a row.
+    db_insert('test_table')->fields(array('id' => 1))->execute();
+    // The second row with the same value should conflict.
+    try {
+      db_insert('test_table')->fields(array('id' => 1))->execute();
+      $this->fail(t('Duplicate values in the table should not be allowed when the primary key is there.'));
+    }
+    catch (Exception $e) {}
+
+    // Drop the primary key and retry.
+    db_drop_primary_key('test_table');
+    $this->pass(t('Removing a primary key should work.'));
+
+    db_insert('test_table')->fields(array('id' => 1))->execute();
+    $this->pass(t('Adding a duplicate row should work without the primary key.'));
+
+    try {
+      db_add_primary_key('test_table', array('id'));
+      $this->fail(t('Trying to add a primary key should fail with duplicate rows in the table.'));
+    }
+    catch (Exception $e) {}
+  }
+}
