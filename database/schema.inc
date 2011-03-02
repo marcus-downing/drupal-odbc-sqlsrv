@@ -27,9 +27,9 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
       $this->additionalColumnInformation = array();
 
       // Don't use {} around information_schema.columns table.
-      $result = $this->connection->query("SELECT table_schema, table_name, column_name FROM information_schema.columns WHERE data_type = :type", array(':type' => 'varbinary'));
+      $result = $this->connection->query("SELECT s.name AS schema_name, ta.name AS table_name, c.name AS column_name FROM sys.types t LEFT JOIN sys.columns c ON c.user_type_id = t.user_type_id LEFT JOIN sys.tables ta ON ta.object_id = c.object_id LEFT JOIN sys.schemas s ON s.schema_id = ta.schema_id WHERE t.name = :type", array(':type' => 'varbinary'));
       foreach ($result as $column) {
-        $this->additionalColumnInformation[$column->table_schema . '.' . $column->table_name]['blobs'][$column->column_name] = TRUE;
+        $this->additionalColumnInformation[$column->schema_name . '.' . $column->table_name]['blobs'][$column->column_name] = TRUE;
       }
 
       // Don't use {} around system tables.
