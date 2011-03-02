@@ -122,9 +122,14 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
       $sql_fields[] = $this->createFieldSql($name, $field_name, $this->processField($field));
     }
 
-    $sql_keys = array();
+    // If the table has no primary key, create one for us.
+    // TODO: only necessary on Azure.
     if (isset($table['primary key']) && is_array($table['primary key'])) {
       $sql_fields[] = 'CONSTRAINT {' . $name . '}_pkey PRIMARY KEY CLUSTERED (' . implode(', ', $this->connection->quoteIdentifiers($table['primary key'])) . ')';
+    }
+    else {
+      $sql_fields[] = '__pk UNIQUEIDENTIFIER DEFAULT NEWID()';
+      $sql_fields[] = 'CONSTRAINT {' . $name . '}_pkey_technical PRIMARY KEY CLUSTERED (__pk)';
     }
 
     $sql = "CREATE TABLE [{" . $name . "}] (\n\t";
@@ -546,11 +551,20 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
     if (!$this->tableExists($table)) {
       throw new DatabaseSchemaObjectDoesNotExistException(t("Cannot add primary key to table %table: table doesn't exist.", array('%table' => $table)));
     }
-    if ($this->primaryKeyExists($table)) {
-      throw new DatabaseSchemaObjectExistsException(t("Cannot add primary key to table %table: primary key already exists.", array('%table' => $table)));
+
+    if ($primary_key_name = $this->primaryKeyName($table)) {
+      if ($this->isTechnicalPrimaryKey($primary_key_name)) {
+        // Destroy the existing technical primary key.
+        $this->connection->query('ALTER TABLE [{' . $table . '}] DROP CONSTRAINT [' . $primary_key_name . ']');
+        $this->cleanUpTechnicalPrimaryColumn($table);
+      }
+      else {
+        throw new DatabaseSchemaObjectExistsException(t("Cannot add primary key to table %table: primary key already exists.", array('%table' => $table)));
+      }
     }
 
     $this->connection->query('ALTER TABLE [{' . $table . '}] ADD CONSTRAINT {' . $table . '_pkey} PRIMARY KEY (' . $this->createKeySql($fields) . ')');
+    return TRUE;
   }
 
   /**
@@ -559,25 +573,56 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
    * @status tested
    */
   public function dropPrimaryKey($table) {
-    if (!$this->primaryKeyExists($table)) {
+    if (!$this->primaryKeyName($table)) {
       return FALSE;
     }
 
-    $this->connection->query('ALTER TABLE [{' . $table . '}] DROP CONSTRAINT {' . $table . '_pkey}');
+    $query  = 'ALTER TABLE [{' . $table . '}] DROP CONSTRAINT {' . $table . '_pkey}';
+
+    $this->createTechnicalPrimaryColumn($table);
+    $query .= ' ADD CONSTRAINT {' . $table . '}_pkey_technical PRIMARY KEY CLUSTERED (__pk)';
+
+    $this->connection->query($query);
     return TRUE;
   }
 
   /**
-   * Find if a primary key exists.
-   *
-   * @status tested
+   * Return the name of the primary key of a table if it exists.
    */
-  protected function primaryKeyExists($table) {
+  protected function primaryKeyName($table) {
     $table = $this->connection->prefixTables('{' . $table . '}');
-    return (bool) $this->connection->query('SELECT 1 FROM sys.key_constraints WHERE parent_object_id = OBJECT_ID(:table) AND type = :type', array(
+    return $this->connection->query('SELECT name FROM sys.key_constraints WHERE parent_object_id = OBJECT_ID(:table) AND type = :type', array(
       ':table' => $table,
       ':type' => 'PK',
     ))->fetchField();
+  }
+
+  /**
+   * Check if a key is a technical primary key.
+   */
+  protected function isTechnicalPrimaryKey($key_name) {
+    return $key_name && preg_match('/_pkey_technical$/', $key_name);
+  }
+
+  /**
+   * Add a primary column to the table.
+   */
+  protected function createTechnicalPrimaryColumn($table) {
+    if (!$this->fieldExists($table, '__pk')) {
+      $this->connection->query('ALTER TABLE {' . $table . '} ADD __pk UNIQUEIDENTIFIER DEFAULT NEWID()');
+    }
+  }
+
+  /**
+   * Try to clean up the technical primary column if possible.
+   */
+  protected function cleanUpTechnicalPrimaryColumn($table) {
+    // Get the number of remaining unique indexes on the table, and prune
+    // the technical primary column if possible.
+    $unique_indexes = $this->connection->query('SELECT COUNT(*) FROM sys.indexes WHERE object_id = OBJECT_ID(:table) AND is_unique = 1', array(':table' => $this->connection->prefixTables('{' . $table . '}')))->fetchField();
+    if (!$unique_indexes && !$this->isTechnicalPrimaryKey($this->primaryKeyName($table))) {
+      $this->dropField($table, '__pk');
+    }
   }
 
   /**
@@ -593,10 +638,7 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
       throw new DatabaseSchemaObjectExistsException(t("Cannot add unique key %name to table %table: unique key already exists.", array('%table' => $table, '%name' => $name)));
     }
 
-    // First, build a GUID key for the table if necessary.
-    if (!$this->fieldExists($table, '__pk')) {
-      $this->connection->query('ALTER TABLE {' . $table . '} ADD __pk UNIQUEIDENTIFIER DEFAULT NEWID()');
-    }
+    $this->createTechnicalPrimaryColumn($table);
 
     // Then, build a expression based on the columns.
     $column_expression = array();
@@ -631,12 +673,8 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
     $this->connection->query('DROP INDEX ' . $name . '_unique ON [{' . $table . '}]');
     $this->connection->query('ALTER TABLE [{' . $table . '}] DROP COLUMN __unique_' . $name);
 
-    // Get the number of remaining unique indexes on the table, and prune
-    // the technical primary key if possible.
-    $unique_indexes = $this->connection->query('SELECT COUNT(*) FROM sys.indexes WHERE object_id = OBJECT_ID(:table) AND is_unique = 1', array(':table' => $this->connection->prefixTables('{' . $table . '}')))->fetchField();
-    if (!$unique_indexes) {
-      $this->dropField($table, '__pk');
-    }
+    // Try to clean-up the technical primary key if possible.
+    $this->cleanUpTechnicalPrimaryColumn($table);
   }
 
   /**
