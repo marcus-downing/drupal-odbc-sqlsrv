@@ -23,30 +23,26 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
    * Database introspection: fetch technical information about a table.
    */
   public function queryColumnInformation($table) {
-    if (!isset($this->additionalColumnInformation)) {
-      $this->additionalColumnInformation = array();
+    $table_info = $this->getPrefixInfo($table);
+    $key = $table_info['schema'] . '.' . $table_info['table'];
+
+    if (!isset($this->additionalColumnInformation[$key])) {
+      $this->additionalColumnInformation[$key] = array();
 
       // Don't use {} around information_schema.columns table.
-      $result = $this->connection->query("SELECT s.name AS schema_name, ta.name AS table_name, c.name AS column_name FROM sys.types t LEFT JOIN sys.columns c ON c.user_type_id = t.user_type_id LEFT JOIN sys.tables ta ON ta.object_id = c.object_id LEFT JOIN sys.schemas s ON s.schema_id = ta.schema_id WHERE t.name = :type", array(':type' => 'varbinary'));
+      $result = $this->connection->query("SELECT name AS column_name FROM sys.columns WHERE object_id = OBJECT_ID(:table) AND user_type_id = TYPE_ID(:type)", array(':table' => $table_info['schema'] . '.' . $table_info['table'], ':type' => 'varbinary'));
       foreach ($result as $column) {
-        $this->additionalColumnInformation[$column->schema_name . '.' . $column->table_name]['blobs'][$column->column_name] = TRUE;
+        $this->additionalColumnInformation[$key]['blobs'][$column->column_name] = TRUE;
       }
 
       // Don't use {} around system tables.
-      $result = $this->connection->query('SELECT s.name AS schema_name, t.name AS table_name, ic.name AS column_name FROM sys.identity_columns ic LEFT JOIN sys.tables t ON t.object_id = ic.object_id LEFT JOIN sys.schemas s ON s.schema_id = t.schema_id');
+      $result = $this->connection->query('SELECT name column_name FROM sys.identity_columns WHERE object_id = OBJECT_ID(:table)', array(':table' => $table_info['schema'] . '.' . $table_info['table']));
       foreach ($result as $column) {
-        $this->additionalColumnInformation[$column->schema_name . '.' . $column->table_name]['identities'][$column->column_name] = TRUE;
+        $this->additionalColumnInformation[$key]['identities'][$column->column_name] = TRUE;
       }
     }
 
-    // Generate a key to reference this table's information on.
-    $key = $this->connection->prefixTables('{' . $table . '}');
-    $key = preg_replace('/[\[\]]/', '', $key);
-    if (!strpos($key, '.')) {
-      $key = 'dbo.' . $key;
-    }
-
-    return isset($this->additionalColumnInformation[$key]) ? $this->additionalColumnInformation[$key] : array();
+    return $this->additionalColumnInformation[$key];
   }
 
   // TODO: implement the same for alter table and add/remove fields.
