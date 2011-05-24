@@ -60,6 +60,10 @@ class DatabaseConnection_sqlsrv extends DatabaseConnection {
     ));
 
     $this->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+    // Fetch the name of the user-bound schema. It is the schema that SQL Server
+    // will use for non-qualified tables.
+    $this->schema()->defaultSchema = $this->query("SELECT SCHEMA_NAME()")->fetchField();
   }
 
   /**
@@ -297,7 +301,7 @@ class DatabaseConnection_sqlsrv extends DatabaseConnection {
       'IF',
     );
     foreach ($functions as $function) {
-      $query = preg_replace('/\b(?<![:.])(' . preg_quote($function) . ')\(/i', 'dbo.$1(', $query);
+      $query = preg_replace('/\b(?<![:.])(' . preg_quote($function) . ')\(/i', $this->schema()->defaultSchema . '.$1(', $query);
     }
 
     $replacements = array(

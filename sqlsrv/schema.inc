@@ -15,7 +15,7 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
   /**
    * Default schema for SQL Server databases.
    */
-  protected $defaultSchema = 'dbo';
+  public $defaultSchema = 'dbo';
 
   protected $additionalColumnInformation = NULL;
 
