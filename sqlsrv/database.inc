@@ -62,14 +62,6 @@ class DatabaseConnection_sqlsrv extends DatabaseConnection {
     $this->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
   }
 
-  public function version() {
-    // We need to the result of SERVERPROPERTY to VARCHAR because the PDO_SQLSRV
-    // driver bails out with a cryptic "sql_type_to_pdo_type: Invalid SQL type provided."
-    // error if we don't.
-    // @todo: remove the cast when the bug is fixed upstream.
-    return $this->query('SELECT CAST(SERVERPROPERTY(:name) AS varchar)', array(':name' => 'productversion'))->fetchField();
-  }
-
   /**
    * Override of PDO::prepare(): prepare a prefetching database statement.
    *
