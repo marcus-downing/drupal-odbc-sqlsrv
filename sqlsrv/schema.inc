@@ -400,6 +400,10 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
     // here and pray for the best.
     $transaction = $this->connection->startTransaction();
 
+    // Introspect the schema and save the current primary key if the column
+    // we are modifying is part of it.
+    $primary_key_sql = $this->introspectPrimaryKey($table, $field);
+
     // Drop the related objects.
     $this->dropFieldRelatedObjects($table, $field);
 
@@ -424,9 +428,14 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
     $this->connection->query('UPDATE [{' . $table . '}] SET [' . $field_new . '] = [' . $field . '_old]');
 
     // Switch to NOT NULL now.
-    if ($fixnull) {
+    if (!empty($fixnull)) {
       $spec['not null'] = TRUE;
       $this->connection->query('ALTER TABLE {' . $table . '} ALTER COLUMN ' . $this->createFieldSql($table, $field_new, $this->processField($spec), TRUE));
+    }
+
+    // Recreate the primary key.
+    if ($primary_key_sql) {
+      $this->recreatePrimaryKey($table, $primary_key_sql);
     }
 
     // Drop the old field.
@@ -436,6 +445,37 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
     if (isset($new_keys)) {
       $this->recreateTableKeys($table, $new_keys);
     }
+  }
+
+  protected function introspectPrimaryKey($table, $field) {
+    // Fetch the list of columns participating to the primary key.
+    $result = $this->connection->query('SELECT i.name, ic.is_descending_key, c.name column_name
+      FROM sys.columns c
+       INNER JOIN sys.index_columns ic ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+       INNER JOIN sys.indexes i ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+      WHERE i.object_id = OBJECT_ID(:table) AND i.is_primary_key = 1 ORDER BY ic.key_ordinal', array(
+      ':table' => $this->connection->prefixTables('{' . $table . '}'),
+    ));
+    $columns = array();
+    $valid = FALSE;
+    foreach ($result as $column) {
+      if ($column->column_name == $field) {
+        $valid = TRUE;
+      }
+      $columns[] = '[' . $column->column_name . ']' . ($column->is_descending_key ? ' DESC' : '');
+    }
+    if ($valid) {
+      return 'ADD CONSTRAINT [' . $column->name . '] PRIMARY KEY CLUSTERED (' . implode(', ', $columns) . ')';
+    }
+  }
+
+  protected function recreatePrimaryKey($table, $primary_key_sql) {
+    // Drop the existing primary key if exists.
+    if ($existing_primary_key = $this->primaryKeyName($table)) {
+      $this->connection->query('ALTER TABLE [{' . $table . '}] DROP CONSTRAINT [' . $existing_primary_key . ']');
+    }
+
+    $this->connection->query('ALTER TABLE [{' . $table . '}] ' . $primary_key_sql);
   }
 
   /**
