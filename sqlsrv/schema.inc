@@ -622,12 +622,11 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
       return FALSE;
     }
 
-    $query  = 'ALTER TABLE [{' . $table . '}] DROP CONSTRAINT {' . $table . '_pkey}';
+    $this->connection->query('ALTER TABLE [{' . $table . '}] DROP CONSTRAINT {' . $table . '_pkey}');
 
     $this->createTechnicalPrimaryColumn($table);
-    $query .= ' ADD CONSTRAINT {' . $table . '}_pkey_technical PRIMARY KEY CLUSTERED (__pk)';
+    $this->connection->query('ALTER TABLE [{' . $table . '}] ADD CONSTRAINT {' . $table . '}_pkey_technical PRIMARY KEY CLUSTERED (__pk)');
 
-    $this->connection->query($query);
     return TRUE;
   }
 
