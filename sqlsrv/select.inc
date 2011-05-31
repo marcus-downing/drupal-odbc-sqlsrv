@@ -66,8 +66,8 @@ class SelectQuery_sqlsrv extends SelectQuery {
   }
 
   public function __toString() {
-    // Create a comments string to prepend to the query.
-    $comments = (!empty($this->comments)) ? '/* ' . implode('; ', $this->comments) . ' */ ' : '';
+    // Create a sanitized comment string to prepend to the query.
+    $comments = $this->connection->makeComment($this->comments);
 
     // SELECT
     $query = $comments . 'SELECT ';

@@ -122,12 +122,12 @@ class InsertQuery_sqlsrv extends InsertQuery {
   }
 
   public function __toString() {
+    // Create a sanitized comment string to prepend to the query.
+    $prefix = $this->connection->makeComment($this->comments);
+
     // Enable direct insertion to identity columns if necessary.
     if (!empty($this->setIdentity)) {
-      $prefix = 'SET IDENTITY_INSERT {' . $this->table . '} ON;';
-    }
-    else {
-      $prefix = '';
+      $prefix .= 'SET IDENTITY_INSERT {' . $this->table . '} ON;';
     }
 
     // If we're selecting from a SelectQuery, finish building the query and
@@ -295,6 +295,9 @@ class UpdateQuery_sqlsrv extends UpdateQuery {
   }
 
   public function __toString() {
+    // Create a sanitized comment string to prepend to the query.
+    $prefix = $this->connection->makeComment($this->comments);
+
     // Expressions take priority over literal fields, so we process those first
     // and remove any literal fields that conflict.
     $fields = $this->fields;
@@ -309,7 +312,7 @@ class UpdateQuery_sqlsrv extends UpdateQuery {
       $update_fields[] = $this->connection->quoteIdentifier($field) . '=:db_update_placeholder_' . ($max_placeholder++);
     }
 
-    $query = 'UPDATE {' . $this->connection->escapeTable($this->table) . '} SET ' . implode(', ', $update_fields);
+    $query = $prefix . 'UPDATE {' . $this->connection->escapeTable($this->table) . '} SET ' . implode(', ', $update_fields);
 
     if (count($this->condition)) {
       $this->condition->compile($this->connection, $this);
@@ -326,7 +329,10 @@ class UpdateQuery_sqlsrv extends UpdateQuery {
  */
 class TruncateQuery_sqlsrv extends TruncateQuery {
   public function __toString() {
-    return 'TRUNCATE TABLE {' . $this->connection->escapeTable($this->table) . '} ';
+    // Create a sanitized comment string to prepend to the query.
+    $prefix = $this->connection->makeComment($this->comments);
+
+    return $prefix . 'TRUNCATE TABLE {' . $this->connection->escapeTable($this->table) . '} ';
   }
 }
 
