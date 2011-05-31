@@ -489,7 +489,16 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
       $this->connection->query('DROP INDEX [' . $index->name . '] ON [{' . $table . '}]');
     }
 
-    // Fetch the list of constraints referencing this column.
+    // Fetch the list of check constraints referencing this column.
+    $constraints = $this->connection->query('SELECT DISTINCT cc.name FROM sys.columns c INNER JOIN sys.check_constraints cc ON cc.parent_object_id = c.object_id AND cc.parent_column_id = c.column_id WHERE c.object_id = OBJECT_ID(:table) AND c.name = :name', array(
+      ':table' => $this->connection->prefixTables('{' . $table . '}'),
+      ':name' => $field,
+    ));
+    foreach ($constraints as $constraint) {
+      $this->connection->query('ALTER TABLE [{' . $table . '}] DROP CONSTRAINT [' . $constraint->name . ']');
+    }
+
+    // Fetch the list of default constraints referencing this column.
     $constraints = $this->connection->query('SELECT DISTINCT dc.name FROM sys.columns c INNER JOIN sys.default_constraints dc ON dc.parent_object_id = c.object_id AND dc.parent_column_id = c.column_id WHERE c.object_id = OBJECT_ID(:table) AND c.name = :name', array(
       ':table' => $this->connection->prefixTables('{' . $table . '}'),
       ':name' => $field,
