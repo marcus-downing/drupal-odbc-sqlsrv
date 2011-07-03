@@ -149,33 +149,6 @@ class DatabaseConnection_sqlsrv extends DatabaseConnection {
     return '';
   }
 
-  /**
-   * Override of DatabaseConnection::prefixTables().
-   *
-   * @status tested
-   */
-  public function prefixTables($sql) {
-    // Implements a simpler (and probably faster) method for prefix replacements.
-    return preg_replace_callback('/{([^}]*)}/', array($this, 'prefixTablesCallback'), $sql);
-  }
-
-  /**
-   * Internal use: replacement callback for DatabaseConnection_sqlsrv::prefixTable().
-   *
-   * @status tested
-   */
-  protected function prefixTablesCallback($matches) {
-    $table = $matches[1];
-
-    // Don't prefix temporary tables.
-    if ($table[0] == '#') {
-      return $table;
-    }
-
-    // Else, do normal prefixing.
-    return (isset($this->prefixes[$table]) ? $this->prefixes[$table] : $this->defaultPrefix) . $table;
-  }
-
   public function quoteIdentifier($identifier) {
     return '[' . $identifier .']';
   }
@@ -207,21 +180,17 @@ class DatabaseConnection_sqlsrv extends DatabaseConnection {
    * @status tested
    */
   public function queryTemporary($query, array $args = array(), array $options = array()) {
+    // Generate a new temporary table name and protect it from prefixing.
+    // SQL Server requires that temporary tables to be non-qualified.
     $tablename = $this->generateTemporaryTableName();
+    $prefixes = $this->prefixes;
+    $prefixes[$tablename] = '';
+    $this->setPrefix($prefixes);
 
     // Replace SELECT xxx FROM table by SELECT xxx INTO #table FROM table.
     $query = preg_replace('/^SELECT(.*?)FROM/i', 'SELECT$1 INTO #' . $tablename . ' FROM', $query);
 
-    // Prefix tables.
-    $query = $this->prefixTables($query);
-
-    // Manually replace placeholders and directly execute the query.
-    // SQL Server requires us to directly execute the query because the temporary
-    // table would be automatically flushed at the end of the prepared statement
-    // execution.
-    $query = $this->preprocessQuery($query);
-    $query = $this->replacePlaceholders($query, $args);
-    PDO::exec($query);
+    $this->query($query, $args, $options);
     return '#' . $tablename;
   }
 
