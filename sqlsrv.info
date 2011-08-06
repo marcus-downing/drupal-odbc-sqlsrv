@@ -9,3 +9,4 @@ hidden = TRUE
 
 ; Tests
 files[] = tests/sqlsrv.schema.test
+files[] = tests/sqlsrv.select.test
