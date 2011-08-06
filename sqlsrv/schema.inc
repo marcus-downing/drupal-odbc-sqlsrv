@@ -479,20 +479,20 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
   }
 
   /**
-   * Re-create keys associated to a table, called by createField().
+   * Re-create keys associated to a table.
    */
   protected function recreateTableKeys($table, $new_keys) {
     if (isset($new_keys['primary key'])) {
-      $this->addPrimaryKey($ret, $table, $new_keys['primary key']);
+      $this->addPrimaryKey($table, $new_keys['primary key']);
     }
     if (isset($new_keys['unique keys'])) {
       foreach ($new_keys['unique keys'] as $name => $fields) {
-        $this->addUniqueKey($ret, $table, $name, $fields);
+        $this->addUniqueKey($table, $name, $fields);
       }
     }
     if (isset($new_keys['indexes'])) {
       foreach ($new_keys['indexes'] as $name => $fields) {
-        $this->addIndex($ret, $table, $name, $fields);
+        $this->addIndex($table, $name, $fields);
       }
     }
   }

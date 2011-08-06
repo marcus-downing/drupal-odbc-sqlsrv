@@ -165,4 +165,50 @@ class SqlServerSchemaTest extends DrupalWebTestCase {
 
     db_delete('test_table')->execute();
   }
+
+  /**
+   * Test db_add_field() and db_change_field() with indexes.
+   */
+  public function testAddChangeWithIndex() {
+    $table_spec = array(
+      'fields' => array(
+        'id'  => array(
+          'type' => 'int',
+          'not null' => TRUE,
+        ),
+      ),
+      'primary key' => array('id'),
+    );
+
+    db_create_table('test_table', $table_spec);
+
+    // Add a default value.
+    db_add_field('test_table', 'test', array(
+      'type' => 'int',
+      'not null' => TRUE,
+      'default' => 1,
+    ), array(
+      'indexes' => array(
+        'id_test' => array('id, test'),
+      ),
+    ));
+
+    $this->assertTrue(db_index_exists('test_table', 'id_test'), t('The index has been created by db_add_field().'));
+
+    // Change the definition, we have by contract to remove the indexes before.
+    db_drop_index('test_table', 'id_test');
+    $this->assertFalse(db_index_exists('test_table', 'id_test'), t('The index has been dropped.'));
+
+    db_change_field('test_table', 'test', 'test', array(
+      'type' => 'int',
+      'not null' => TRUE,
+      'default' => 1,
+    ), array(
+      'indexes' => array(
+        'id_test' => array('id, test'),
+      ),
+    ));
+
+    $this->assertTrue(db_index_exists('test_table', 'id_test'), t('The index has been recreated by db_change_field().'));
+  }
 }
