@@ -14,6 +14,8 @@ include_once DRUPAL_ROOT . '/includes/database/prefetch.inc';
 
 class DatabaseConnection_sqlsrv extends DatabaseConnection {
 
+  public $bypassQueryPreprocess = FALSE;
+
   /**
    * Override of DatabaseConnection::driver().
    *
@@ -97,7 +99,9 @@ class DatabaseConnection_sqlsrv extends DatabaseConnection {
    * PHP process.
    */
   public function PDOPrepare($query, array $options = array()) {
-    $query = $this->preprocessQuery($query);
+    if (!$this->bypassQueryPreprocess) {
+      $query = $this->preprocessQuery($query);
+    }
     return parent::prepare($query, $options);
   }
 
@@ -264,6 +268,7 @@ class DatabaseConnection_sqlsrv extends DatabaseConnection {
 
     // Add prefixes to Drupal-specific functions.
     $functions = array(
+      'SUBSTRING',
       'SUBSTRING_INDEX',
       'GREATEST',
       'CONCAT',

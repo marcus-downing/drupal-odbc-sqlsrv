@@ -27,8 +27,21 @@ class DatabaseTasks_sqlsrv extends DatabaseTasks {
    */
   function initializeDatabase() {
     $database = Database::getConnection();
-
+    $database->bypassQueryPreprocess = TRUE;
     try {
+      // SUBSTRING() function.
+      $database->query(<<< EOF
+IF OBJECT_ID (N'SUBSTRING', N'FN') IS NOT NULL BEGIN DROP FUNCTION SUBSTRING END
+EOF
+      );
+      $database->query(<<< EOF
+CREATE FUNCTION [SUBSTRING](@op1 nvarchar(max), @op2 sql_variant, @op3 sql_variant) RETURNS nvarchar(max) AS
+BEGIN
+  RETURN CAST(SUBSTRING(CAST(@op1 AS nvarchar(max)), CAST(@op2 AS int), CAST(@op3 AS int)) AS nvarchar(max))
+END
+EOF
+      );
+
       // SUBSTRING_INDEX() function.
       $database->query(<<< EOF
 IF OBJECT_ID (N'SUBSTRING_INDEX', N'FN') IS NOT NULL BEGIN DROP FUNCTION SUBSTRING_INDEX END
@@ -102,6 +115,7 @@ BEGIN
 END
 EOF
       );
+      $database->bypassQueryPreprocess = FALSE;
     }
     catch (Exception $e) {
       $this->fail(st('Drupal could not be correctly setup with the existing database. Revise any errors.'));
