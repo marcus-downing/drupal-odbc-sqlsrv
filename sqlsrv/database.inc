@@ -262,7 +262,9 @@ class DatabaseConnection_sqlsrv extends DatabaseConnection {
       '/^SAVEPOINT (.*)$/' => 'SAVE TRANSACTION $1',
       '/^ROLLBACK TO SAVEPOINT (.*)$/' => 'ROLLBACK TRANSACTION $1',
       // SQL Server doesn't need an explicit RELEASE SAVEPOINT.
-      '/^RELEASE SAVEPOINT (.*)$/' => '-- $0',
+      // Run a non-operaiton query to avoid a fatal error
+      // when no query is runned.
+      '/^RELEASE SAVEPOINT (.*)$/' => 'SELECT 1 /* $0 */',
     );
     $query = preg_replace(array_keys($replacements), $replacements, $query);
 
