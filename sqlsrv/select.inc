@@ -46,20 +46,8 @@ class SelectQuery_sqlsrv extends SelectQuery {
         }
         // Expand an alias on an expression.
         else if (isset($this->expressions[$group_field])) {
-          $expression = &$this->expressions[$group_field];
+          $expression = $this->expressions[$group_field];
           $group_field = $expression['expression'];
-          // Replace the placeholders to avoid generating a query with duplicate
-          // placeholders.
-          foreach ($expression['arguments'] as $placeholder => $placeholder_value) {
-            $new_placeholder = ':db_groupby_' . $this->nextPlaceholder();
-            $expression['arguments'][$new_placeholder] = $placeholder_value;
-
-            // Perform the replacement in the group by.
-            if ($placeholder[0] != ':') {
-              $placeholder = ":$placeholder";
-            }
-            $group_field = preg_replace('/' . preg_quote($placeholder) . '\b/', $new_placeholder, $group_field);
-          }
         }
       }
     }
