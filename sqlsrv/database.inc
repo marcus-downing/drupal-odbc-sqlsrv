@@ -102,6 +102,12 @@ class DatabaseConnection_sqlsrv extends DatabaseConnection {
     if (!$this->bypassQueryPreprocess) {
       $query = $this->preprocessQuery($query);
     }
+    // THIS FIX IS TEMPORARY UNTIL MICROSOFT MOVE THE IMPLEMENTATION
+    // OF THIS ATTRIBUTE IN THE PDO DRIVER OPTIONS.
+    // Let's emulate the attributes preparation because it costs a little
+    // bit more to have it disabled than enabled and because we are not
+    // leveraging the benefits of it.
+    $options[PDO::ATTR_EMULATE_PREPARES] = TRUE;
     return parent::prepare($query, $options);
   }
 
