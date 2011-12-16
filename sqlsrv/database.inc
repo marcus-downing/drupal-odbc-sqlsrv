@@ -58,7 +58,20 @@ class DatabaseConnection_sqlsrv extends DatabaseConnection {
 
     // Launch the connection to the server.
     parent::__construct('sqlsrv:' . implode(';', $options), $connection_options['username'], $connection_options['password'], array(
+      // We run the statements in "direct mode" because the way PDO prepares
+      // statement in non-direct mode cause temporary tables to be destroyed
+      // at the end of the statement.
       PDO::SQLSRV_ATTR_DIRECT_QUERY => TRUE,
+      // We ask PDO to perform the placeholders replacement itself because
+      // SQL Server is not able to detect duplicated placeholders in
+      // complex statements.
+      // E.g. This query is going to fail because SQL Server cannot
+      // detect that length1 and length2 are equals.
+      // SELECT SUBSTRING(title, 1, :length1)
+      // FROM node
+      // GROUP BY SUBSTRING(title, 1, :length2);
+      // This is only going to work in PDO 3 but doesn't hurt in PDO 2.
+      PDO::ATTR_EMULATE_PREPARES => TRUE,
     ));
 
     $this->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -102,12 +115,6 @@ class DatabaseConnection_sqlsrv extends DatabaseConnection {
     if (!$this->bypassQueryPreprocess) {
       $query = $this->preprocessQuery($query);
     }
-    // THIS FIX IS TEMPORARY UNTIL MICROSOFT MOVE THE IMPLEMENTATION
-    // OF THIS ATTRIBUTE IN THE PDO DRIVER OPTIONS.
-    // Let's emulate the attributes preparation because it costs a little
-    // bit more to have it disabled than enabled and because we are not
-    // leveraging the benefits of it.
-    $options[PDO::ATTR_EMULATE_PREPARES] = TRUE;
     return parent::prepare($query, $options);
   }
 
