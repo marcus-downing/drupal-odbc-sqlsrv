@@ -56,13 +56,13 @@ class SelectQuery_sqlsrv extends SelectQuery {
   }
 
   /**
-   * Override for SelectQuery::getArguments().
+   * Override for SelectQuery::compile().
    *
    * Detect when this query is prepared for use in a sub-query.
    */
-  public function getArguments(QueryPlaceholderInterface $queryPlaceholder = NULL) {
-    $this->inSubQuery = isset($queryPlaceholder) && ($queryPlaceholder != $this);
-    return parent::getArguments($queryPlaceholder);
+  public function compile(DatabaseConnection $connection, QueryPlaceholderInterface $queryPlaceholder) {
+    $this->inSubQuery = $queryPlaceholder != $this;
+    return parent::compile($connection, $queryPlaceholder);
   }
 
   public function __toString() {
