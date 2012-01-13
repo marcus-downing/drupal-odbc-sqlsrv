@@ -199,16 +199,16 @@ class DatabaseConnection_sqlsrv extends DatabaseConnection {
   public function queryTemporary($query, array $args = array(), array $options = array()) {
     // Generate a new temporary table name and protect it from prefixing.
     // SQL Server requires that temporary tables to be non-qualified.
-    $tablename = $this->generateTemporaryTableName();
+    $tablename = '#' . $this->generateTemporaryTableName();
     $prefixes = $this->prefixes;
     $prefixes[$tablename] = '';
     $this->setPrefix($prefixes);
 
     // Replace SELECT xxx FROM table by SELECT xxx INTO #table FROM table.
-    $query = preg_replace('/^SELECT(.*?)FROM/i', 'SELECT$1 INTO #' . $tablename . ' FROM', $query);
+    $query = preg_replace('/^SELECT(.*?)FROM/i', 'SELECT$1 INTO ' . $tablename . ' FROM', $query);
 
     $this->query($query, $args, $options);
-    return '#' . $tablename;
+    return $tablename;
   }
 
   /**
