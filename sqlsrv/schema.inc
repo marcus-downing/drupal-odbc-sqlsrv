@@ -404,6 +404,10 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
     // we are modifying is part of it.
     $primary_key_sql = $this->introspectPrimaryKey($table, $field);
 
+    // If there is a generated unique key for this field, we will need to
+    // add it back in when we are done
+    $unique_key = $this->uniqueKeyExists($table, $field);
+
     // Drop the related objects.
     $this->dropFieldRelatedObjects($table, $field);
 
@@ -436,6 +440,11 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
     // Recreate the primary key.
     if ($primary_key_sql) {
       $this->recreatePrimaryKey($table, $primary_key_sql);
+    }
+    if ($unique_key) {
+      $fields = array();
+      $fields[] = $field;
+      $this->addUniqueKey($table, $field, $fields);
     }
 
     // Drop the old field.
@@ -547,7 +556,11 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
       $this->connection->query('ALTER TABLE [{' . $table . '}] DROP CONSTRAINT [' . $constraint->name . ']');
     }
 
-    // TODO: we might need to drop computed columns when we have some.
+    // Drop any indexes on related computed columns when we have some.
+    if ($this->uniqueKeyExists($table, $field)) {
+      $this->dropUniqueKey($table, $field);
+    }
+
   }
 
   /**
