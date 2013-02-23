@@ -136,4 +136,15 @@ EOF
       $this->fail(st('Drupal could not be correctly setup with the existing database. Revise any errors.'));
     }
   }
+
+  // Modify the default options form to allow Windows authentication.
+  public function getFormOptions($database) {
+    $form = parent::getFormOptions($database);
+    // Make username not required.
+    $form['username']['#required'] = FALSE;
+    // Add a description for about leaving username blank.
+    $form['username']['#description'] = t('Leave username (and password) blank to use Windows authentication.');
+
+    return $form;
+  }
 }
