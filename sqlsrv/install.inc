@@ -55,17 +55,32 @@ BEGIN
   DECLARE @part int
   SET @end = 0
   SET @part = 0
-  WHILE (@part < @count)
+  IF (@count = 0)
   BEGIN
-    SET @end = CHARINDEX(@delimiter, @string, @end + 1)
-    IF (@end = 0)
-    BEGIN
-      SET @end = LEN(@string) + 1
-      BREAK
-    END
-    SET @part = @part + 1
+    SET @result = ''
   END
-  SET @result = SUBSTRING(@string, 1, @end - 1)
+  ELSE
+  BEGIN
+    IF (@count < 0)
+    BEGIN
+      SET @string = REVERSE(@string)
+    END
+    WHILE (@part < ABS(@count))
+    BEGIN
+      SET @end = CHARINDEX(@delimiter, @string, @end + 1)
+      IF (@end = 0)
+      BEGIN
+        SET @end = LEN(@string) + 1
+        BREAK
+      END
+      SET @part = @part + 1
+    END
+    SET @result = SUBSTRING(@string, 1, @end - 1)
+    IF (@count < 0)
+    BEGIN
+      SET @result = REVERSE(@result)
+    END
+  END
   RETURN @result
 END
 EOF
