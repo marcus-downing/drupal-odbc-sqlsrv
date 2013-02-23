@@ -151,10 +151,10 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
   protected function createFieldSql($table, $name, $spec, $skip_checks = FALSE) {
     $sql = $this->connection->quoteIdentifier($name) . ' ' . $spec['sqlsrv_type'];
 
-    if (!empty($spec['length'])) {
+    if (in_array($spec['sqlsrv_type'], array('char', 'varchar', 'text', 'nchar', 'nvarchar', 'ntext')) && !empty($spec['length'])) {
       $sql .= '(' . $spec['length'] . ')';
     }
-    elseif (isset($spec['precision']) && isset($spec['scale'])) {
+    elseif (in_array($spec['sqlsrv_type'], array('numeric', 'decimal')) && isset($spec['precision']) && isset($spec['scale'])) {
       $sql .= '(' . $spec['precision'] . ', ' . $spec['scale'] . ')';
     }
 
