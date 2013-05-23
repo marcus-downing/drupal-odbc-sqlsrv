@@ -429,7 +429,9 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
     $this->addField($table, $field_new, $spec);
 
     // Migrate the data over.
-    $this->connection->query('UPDATE [{' . $table . '}] SET [' . $field_new . '] = [' . $field . '_old]');
+    // Explicitly cast the old value to the new value to avoid conversion errors.
+    $field_spec = $this->processField($spec);
+    $this->connection->query('UPDATE [{' . $table . '}] SET [' . $field_new . '] = CAST([' . $field . '_old] AS ' . $field_spec['sqlsrv_type'] . ')');
 
     // Switch to NOT NULL now.
     if (!empty($fixnull)) {
