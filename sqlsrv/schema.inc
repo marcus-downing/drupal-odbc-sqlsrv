@@ -171,7 +171,7 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
         $sql .= ' IDENTITY';
       }
       if (!empty($spec['unsigned'])) {
-        $sql .= ' CHECK (' . $name . ' >= 0)';
+        $sql .= ' CHECK (' . $this->connection->quoteIdentifier($name) . ' >= 0)';
       }
     }
     return $sql;
@@ -577,7 +577,7 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
       $default = 'NULL';
     }
     elseif (is_string($default)) {
-      $default = "'" . addslashes($spec['default']) . "'";      
+      $default = "'" . addslashes($spec['default']) . "'";
     }
 
     // Try to remove any existing default first.
