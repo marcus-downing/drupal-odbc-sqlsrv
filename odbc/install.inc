@@ -1,13 +1,13 @@
 <?php
 
-// Microsoft SQL Server specific install functions
+// ODBC specific install functions
 
-class DatabaseTasks_sqlsrv extends DatabaseTasks {
+class DatabaseTasks_odbc extends DatabaseTasks {
 
-  protected $pdoDriver = 'sqlsrv';
+  protected $pdoDriver = 'odbc';
 
   public function name() {
-    return 'Microsoft SQL Server';
+    return 'ODBC';
   }
 
   public function __construct() {
@@ -141,9 +141,9 @@ EOF
   public function getFormOptions($database) {
     $form = parent::getFormOptions($database);
     // Make username not required.
-    $form['username']['#required'] = FALSE;
+    $form['username']['#required'] = TRUE;
     // Add a description for about leaving username blank.
-    $form['username']['#description'] = t('Leave username (and password) blank to use Windows authentication.');
+    $form['username']['#description'] = t('Leave username (and password) blank to use Windows authentication. (Not supported with ODBC)');
 
     return $form;
   }
