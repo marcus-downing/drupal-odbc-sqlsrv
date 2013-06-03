@@ -53,7 +53,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     // Build the DSN.
     $options = array(
       // TODO: Make this work with a named DSN
-      'DRIVER=' . $connection_options['driver']
+      'DRIVER=' . $connection_options['odbc_driver']
       // TODO: Check whether we pass port information in the same way as sqlsrv
       'Server=' . $connection_options['host'] . (!empty($connection_options['port']) ? ',' . $connection_options['port'] : ''),
       'Database=' . $connection_options['database'],
