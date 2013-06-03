@@ -1,12 +1,13 @@
-name = SQL Server
-description = Driver for SQL Server and SQL Azure.
+name = Odbc
+description = Driver for ODBC databases, such as Sql Server on Linux
 core = 7.x
 package = Database engines
 
 ; This is slightly evil, but for a good cause. We need the module to be
 ; enabled in order to receive security updated and track usage data.
-required = TRUE
+; Disabling this for ODBC while we're in Sandbox stage
+; required = TRUE
 
 ; Tests
-files[] = tests/sqlsrv.schema.test
-files[] = tests/sqlsrv.select.test
+files[] = tests/odbc.schema.test
+files[] = tests/odbc.select.test
