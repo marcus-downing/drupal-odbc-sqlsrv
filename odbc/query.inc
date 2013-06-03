@@ -6,7 +6,7 @@
  * SQL Server doesn't supports multi-insert queries, and needs special handling for
  * binary columns.
  */
-class InsertQuery_sqlsrv extends InsertQuery {
+class InsertQuery_odbc extends InsertQuery {
 
   public function execute() {
     if (!$this->preExecute()) {
@@ -25,6 +25,7 @@ class InsertQuery_sqlsrv extends InsertQuery {
 
     // Each insert happens in its own query. However, we wrap it in a transaction
     // so that it is atomic where possible.
+    // TODO: Do we want to rename this option?
     if (empty($this->queryOptions['sqlsrv_skip_transactions'])) {
       $transaction = $this->connection->startTransaction();
     }
@@ -92,7 +93,8 @@ class InsertQuery_sqlsrv extends InsertQuery {
           fwrite($data_values[$placeholder . $insert_index], $insert_values[$field_index]);
           rewind($data_values[$placeholder . $insert_index]);
 
-          $stmt->bindParam($placeholder, $data_values[$placeholder . $insert_index], PDO::PARAM_LOB, 0, PDO::SQLSRV_ENCODING_BINARY);
+          // Need to consider PDO_ODBC equivalent technique if relevant
+          //$stmt->bindParam($placeholder, $data_values[$placeholder . $insert_index], PDO::PARAM_LOB, 0, PDO::SQLSRV_ENCODING_BINARY);
         }
         else {
           $data_values[$placeholder . $insert_index] = $insert_values[$field_index];
@@ -154,7 +156,7 @@ class InsertQuery_sqlsrv extends InsertQuery {
  *    requires the number of affected rows to be returned.
  *  - SQL Server requires a special handling for the blobs.
  */
-class UpdateQuery_sqlsrv extends UpdateQuery {
+class UpdateQuery_odbc extends UpdateQuery {
   /**
    * Rewrite the query not to select non-affected rows.
    *
@@ -249,7 +251,8 @@ class UpdateQuery_sqlsrv extends UpdateQuery {
         $blobs[$blob_count] = fopen('php://memory', 'a');
         fwrite($blobs[$blob_count], $value);
         rewind($blobs[$blob_count]);
-        $stmt->bindParam($placeholder, $blobs[$blob_count], PDO::PARAM_LOB, 0, PDO::SQLSRV_ENCODING_BINARY);
+        // Again, do we need a PDO_ODBC specific way of dealing with binary encoings
+        //$stmt->bindParam($placeholder, $blobs[$blob_count], PDO::PARAM_LOB, 0, PDO::SQLSRV_ENCODING_BINARY);
         $blob_count++;
       }
       else {
@@ -306,7 +309,7 @@ class UpdateQuery_sqlsrv extends UpdateQuery {
 /**
  * SQL Server-specific implementation of TRUNCATE.
  */
-class TruncateQuery_sqlsrv extends TruncateQuery {
+class TruncateQuery_odbc extends TruncateQuery {
   public function __toString() {
     // Create a sanitized comment string to prepend to the query.
     $prefix = $this->connection->makeComment($this->comments);
@@ -318,9 +321,10 @@ class TruncateQuery_sqlsrv extends TruncateQuery {
 /**
  * SQL Server-specific implementation of the MERGE operation.
  */
-class MergeQuery_sqlsrv extends MergeQuery {
+class MergeQuery_odbc extends MergeQuery {
   public function execute() {
     // We don't need INSERT or UPDATE queries to trigger additional transactions.
+    // TODO: Do we want to rename this option
     $this->queryOptions['sqlsrv_skip_transactions'] = TRUE;
 
     return parent::execute();
