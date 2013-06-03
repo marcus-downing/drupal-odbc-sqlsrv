@@ -2,7 +2,7 @@
 
 /**
  * @file
- * Database interface code for Microsoft SQL Server.
+ * Database interface code for ODBC PDO driver.
  */
 
 /**
@@ -12,7 +12,7 @@
 
 include_once DRUPAL_ROOT . '/includes/database/prefetch.inc';
 
-class DatabaseConnection_sqlsrv extends DatabaseConnection {
+class DatabaseConnection_odbc extends DatabaseConnection {
 
   public $bypassQueryPreprocess = FALSE;
 
@@ -22,7 +22,7 @@ class DatabaseConnection_sqlsrv extends DatabaseConnection {
    * @status tested
    */
   public function driver() {
-    return 'sqlsrv';
+    return 'odbc';
   }
 
   /**
@@ -31,7 +31,7 @@ class DatabaseConnection_sqlsrv extends DatabaseConnection {
    * @status tested
    */
   public function databaseType() {
-    return 'sqlsrv';
+    return 'odbc';
   }
 
   /**
@@ -44,7 +44,7 @@ class DatabaseConnection_sqlsrv extends DatabaseConnection {
     $this->connectionOptions = $connection_options;
 
     // We don't need a specific PDOStatement class here, we simulate it using
-    // DatabaseStatement_sqlsrv below.
+    // DatabaseStatement_odbc below.
     $this->statementClass = NULL;
 
     // This driver defaults to transaction support, except if explicitly passed FALSE.
@@ -52,16 +52,15 @@ class DatabaseConnection_sqlsrv extends DatabaseConnection {
 
     // Build the DSN.
     $options = array(
+      // TODO: Make this work with a named DSN
+      'DRIVER=' . $connection_options['driver']
+      // TODO: Check whether we pass port information in the same way as sqlsrv
       'Server=' . $connection_options['host'] . (!empty($connection_options['port']) ? ',' . $connection_options['port'] : ''),
       'Database=' . $connection_options['database'],
     );
 
     // Launch the connection to the server.
-    parent::__construct('sqlsrv:' . implode(';', $options), $connection_options['username'], $connection_options['password'], array(
-      // We run the statements in "direct mode" because the way PDO prepares
-      // statement in non-direct mode cause temporary tables to be destroyed
-      // at the end of the statement.
-      PDO::SQLSRV_ATTR_DIRECT_QUERY => TRUE,
+    parent::__construct('odbc:' . implode(';', $options), $connection_options['username'], $connection_options['password'], array(
       // We ask PDO to perform the placeholders replacement itself because
       // SQL Server is not able to detect duplicated placeholders in
       // complex statements.
@@ -87,7 +86,7 @@ class DatabaseConnection_sqlsrv extends DatabaseConnection {
    * @status tested
    */
   public function prepare($query, $options = array()) {
-    return new DatabaseStatement_sqlsrv($this, $query, $options);
+    return new DatabaseStatement_odbc($this, $query, $options);
   }
 
   /**
@@ -379,7 +378,7 @@ class DatabaseConnection_sqlsrv extends DatabaseConnection {
   }
 }
 
-class DatabaseStatement_sqlsrv extends DatabaseStatementPrefetch implements Iterator, DatabaseStatementInterface {
+class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterator, DatabaseStatementInterface {
   protected function getStatement($query, &$args = array()) {
     return $this->dbh->PDOPrepare($query);
   }
@@ -423,7 +422,8 @@ class DatabaseStatement_sqlsrv extends DatabaseStatementPrefetch implements Iter
       $meta = $statement->getColumnMeta($i);
       if ($meta['sqlsrv:decl_type'] == 'varbinary') {
         $null[$i] = NULL;
-        $statement->bindColumn($i + 1, $null[$i], PDO::PARAM_LOB, 0, PDO::SQLSRV_ENCODING_BINARY);
+        // TODO: Is this doable (or even relevant) with PDO_ODBC?
+        // $statement->bindColumn($i + 1, $null[$i], PDO::PARAM_LOB, 0, PDO::SQLSRV_ENCODING_BINARY);
       }
     }
 
@@ -449,6 +449,7 @@ class DatabaseStatement_sqlsrv extends DatabaseStatementPrefetch implements Iter
     }
 
     // Remove technical columns from the final result set.
+    // TODO: Do we want to rename these options?
     $droppable_columns = array_flip(isset($options['sqlsrv_drop_columns']) ? $options['sqlsrv_drop_columns'] : array());
     $dropped_columns = array();
     foreach ($this->columnNames as $k => $column) {
@@ -488,4 +489,4 @@ class DatabaseStatement_sqlsrv extends DatabaseStatementPrefetch implements Iter
  *
  * @see http://drupal.org/node/851136
  */
-class DatabaseTransaction_sqlsrv extends DatabaseTransaction { }
+class DatabaseTransaction_odbc extends DatabaseTransaction { }
