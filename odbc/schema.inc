@@ -2,7 +2,7 @@
 
 /**
  * @file
- * Database schema code for Microsoft SQL Server database servers.
+ * Database schema code for ODBC / Microsoft SQL Server database servers.
  */
 
 /**
@@ -10,7 +10,7 @@
  * @{
  */
 
-class DatabaseSchema_sqlsrv extends DatabaseSchema {
+class DatabaseSchema_odbc extends DatabaseSchema {
 
   /**
    * Default schema for SQL Server databases.
@@ -45,7 +45,7 @@ class DatabaseSchema_sqlsrv extends DatabaseSchema {
     return $this->additionalColumnInformation[$key];
   }
 
-  // TODO: implement the same for alter table and add/remove fields.
+  // Sqlsrv TODO: implement the same for alter table and add/remove fields.
   public function createTable($name, $table) {
     // Reset the additional column information because the schema changed.
     $this->additionalColumnInformation = NULL;
