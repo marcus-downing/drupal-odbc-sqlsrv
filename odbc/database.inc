@@ -417,15 +417,16 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
     $this->rowCount = $statement->rowCount();
 
     // Bind the binary columns properly.
-    $null = array();
-    for ($i = 0; $i < $statement->columnCount(); $i++) {
-      $meta = $statement->getColumnMeta($i);
-      if ($meta['sqlsrv:decl_type'] == 'varbinary') {
-        $null[$i] = NULL;
-        // TODO: Is this doable (or even relevant) with PDO_ODBC?
-        // $statement->bindColumn($i + 1, $null[$i], PDO::PARAM_LOB, 0, PDO::SQLSRV_ENCODING_BINARY);
-      }
-    }
+    // TODO: We can't to any of this because getColumnMeta doesn't work and there's on PDO_ODBC
+    // equivalent to PDO::SQLSRV_ENCODING_BINARY
+    // $null = array();
+    // for ($i = 0; $i < $statement->columnCount(); $i++) {
+    //   $meta = $statement->getColumnMeta($i);
+    //   if ($meta['sqlsrv:decl_type'] == 'varbinary') {
+    //     $null[$i] = NULL;
+    //     $statement->bindColumn($i + 1, $null[$i], PDO::PARAM_LOB, 0, PDO::SQLSRV_ENCODING_BINARY);
+    //   }
+    // }
 
     try {
       $this->data = $statement->fetchAll(PDO::FETCH_ASSOC);
