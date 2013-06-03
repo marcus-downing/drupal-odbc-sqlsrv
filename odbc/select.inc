@@ -1,6 +1,6 @@
 <?php
 
-class SelectQuery_sqlsrv extends SelectQuery {
+class SelectQuery_odbc extends SelectQuery {
 
   /**
    * Override for SelectQuery::preExecute().
@@ -32,6 +32,7 @@ class SelectQuery_sqlsrv extends SelectQuery {
         if (!isset($this->fields[$field]) && !isset($this->expressions[$field])) {
           $alias = '_field_' . ($counter++);
           $this->addExpression($field, $alias);
+          // TODO: Do we want to rename this option?
           $this->queryOptions['sqlsrv_drop_columns'][] = $alias;
         }
       }
