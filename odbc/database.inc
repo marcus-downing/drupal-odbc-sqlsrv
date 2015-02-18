@@ -59,6 +59,10 @@ class DatabaseConnection_odbc extends DatabaseConnection {
       'Database=' . $connection_options['database'],
     );
 
+    if ($connection_options['odbc_driver'] == 'FreeTDS' && isset($connection_options['tds_version'])) {
+      $options[] = 'TDS_Version='.$connection_options['tds_version'];
+    }
+
     // Launch the connection to the server.
     parent::__construct('odbc:' . implode(';', $options), $connection_options['username'], $connection_options['password'], array(
       // We ask PDO to perform the placeholders replacement itself because
