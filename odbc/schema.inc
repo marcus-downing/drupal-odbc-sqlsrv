@@ -51,6 +51,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
     $this->additionalColumnInformation = NULL;
 
     if ($this->tableExists($name)) {
+      if (ODBC_FORGIVING) return;
       throw new DatabaseSchemaObjectExistsException(t('Table %name already exists.', array('%name' => $name)));
     }
 
@@ -346,6 +347,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
       throw new DatabaseSchemaObjectDoesNotExistException(t("Cannot add field %table.%field: table doesn't exist.", array('%field' => $field, '%table' => $table)));
     }
     if ($this->fieldExists($table, $field)) {
+      if (ODBC_FORGIVING) return;
       throw new DatabaseSchemaObjectExistsException(t("Cannot add field %table.%field: field already exists.", array('%field' => $field, '%table' => $table)));
     }
 
