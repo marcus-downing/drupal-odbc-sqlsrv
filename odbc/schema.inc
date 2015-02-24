@@ -30,7 +30,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
       $this->additionalColumnInformation[$key] = array();
 
       // Don't use {} around information_schema.columns table.
-      $result = $this->connection->query("SELECT name AS column_name FROM sys.columns WHERE object_id = OBJECT_ID(:table) AND user_type_id = TYPE_ID(:type)", array(':table' => $table_info['schema'] . '.' . $table_info['table'], ':type' => 'varbinary'));
+      $result = $this->connection->query("SELECT name AS column_name FROM sys.columns WHERE object_id = OBJECT_ID(:table) AND user_type_id = TYPE_ID(:type)", array(':table' => $table_info['schema'] . '.' . $table_info['table'], ':type' => 'text'));
       foreach ($result as $column) {
         $this->additionalColumnInformation[$key]['blobs'][$column->column_name] = TRUE;
       }
@@ -235,11 +235,11 @@ class DatabaseSchema_odbc extends DatabaseSchema {
       'varchar:normal' => 'nvarchar',
       'char:normal' => 'nchar',
 
-      'text:tiny' => 'nvarchar(max)',
-      'text:small' => 'nvarchar(max)',
-      'text:medium' => 'nvarchar(max)',
-      'text:big' => 'nvarchar(max)',
-      'text:normal' => 'nvarchar(max)',
+      'text:tiny' => 'text',
+      'text:small' => 'text',
+      'text:medium' => 'text',
+      'text:big' => 'text',
+      'text:normal' => 'text',
 
       'serial:tiny'     => 'smallint',
       'serial:small'    => 'smallint',
@@ -261,8 +261,8 @@ class DatabaseSchema_odbc extends DatabaseSchema {
 
       'numeric:normal' => 'numeric',
 
-      'blob:big' => 'varbinary(max)',
-      'blob:normal' => 'varbinary(max)',
+      'blob:big' => 'text',
+      'blob:normal' => 'text',
 
       'datetime:normal' => 'timestamp',
       'date:normal'     => 'date',
@@ -703,10 +703,10 @@ class DatabaseSchema_odbc extends DatabaseSchema {
     $column_expression = array();
     foreach ($fields as $field) {
       if (is_array($field)) {
-        $column_expression[] = 'SUBSTRING(CAST(' . $field[0] . ' AS varbinary(max)),1,' . $field[1] . ')';
+        $column_expression[] = 'SUBSTRING(CAST(' . $field[0] . ' AS text),1,' . $field[1] . ')';
       }
       else {
-        $column_expression[] = 'CAST(' . $field . ' AS varbinary(max))';
+        $column_expression[] = 'CAST(' . $field . ' AS text)';
       }
     }
     $column_expression = implode(' + ', $column_expression);
@@ -715,7 +715,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
     // values with the globally unique identifier generated previously.
     // This is (very) unlikely to result in a collision with any actual value
     // in the columns of the unique key.
-    $this->connection->query('ALTER TABLE {' . $table . '} ADD __unique_' . $name . " AS CAST(HashBytes('MD4', COALESCE(" . $column_expression . ", CAST(__pk AS varbinary(max)))) AS varbinary(16))");
+    $this->connection->query('ALTER TABLE {' . $table . '} ADD __unique_' . $name . " AS CAST(HashBytes('MD4', COALESCE(" . $column_expression . ", CAST(__pk AS text))) AS varbinary(16))");
     $this->connection->query('CREATE UNIQUE INDEX ' . $name . '_unique ON [{' . $table . '}] (__unique_' . $name . ')');
   }
 

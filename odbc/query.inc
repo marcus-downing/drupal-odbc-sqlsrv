@@ -9,6 +9,7 @@
 class InsertQuery_odbc extends InsertQuery {
 
   public function execute() {
+    if (ODBC_DEBUG) echo "Executing INSERT: $this\n";
     if (!$this->preExecute()) {
       return NULL;
     }
@@ -31,14 +32,33 @@ class InsertQuery_odbc extends InsertQuery {
     }
 
     if (!empty($this->fromQuery)) {
+      if (ODBC_DEBUG) echo "Executing INSERT from query\n";
       // Re-initialize the values array so that we can re-use this query.
       $this->insertValues = array();
 
-      $stmt = $this->connection->PDOPrepare($this->connection->prefixTables((string) $this));
-      // Handle the case of SELECT-based INSERT queries first.
-      $values = $this->fromQuery->getArguments();
-      foreach ($values as $key => $value) {
-        $stmt->bindParam($key, $values[$key]);
+      if (ODBC_EMULATE_PREPARES) {
+        $queryString = $this->connection->prefixTables((string) $this);
+        $values = $this->fromQuery->getArguments();
+        if (ODBC_DEBUG) {
+          echo "<pre>Precomposing insert: $queryString\n";
+          print_r($values);
+        }
+
+        $queryString = $this->connection->replacePlaceholders($queryString, $values);
+
+        if (ODBC_DEBUG) {
+          echo "\nResult: ".$queryString;
+          echo "</pre>\n";
+        }
+
+        $stmt = $this->connection->PDOPrepare($queryString);
+      } else {
+        $stmt = $this->connection->PDOPrepare($this->connection->prefixTables((string) $this));
+        // Handle the case of SELECT-based INSERT queries first.
+        $values = $this->fromQuery->getArguments();
+        foreach ($values as $key => $value) {
+          $stmt->bindParam($key, $values[$key]);
+        }
       }
 
       try {
@@ -58,6 +78,8 @@ class InsertQuery_odbc extends InsertQuery {
 
     // Handle the case of full-default queries.
     if (empty($this->fromQuery) && (empty($this->insertFields) || empty($this->insertValues))) {
+      if (ODBC_DEBUG) echo "<p>Executing INSERT full default</p>\n";
+
       // Re-initialize the values array so that we can re-use this query.
       $this->insertValues = array();
 
@@ -76,6 +98,53 @@ class InsertQuery_odbc extends InsertQuery {
 
       return $this->connection->lastInsertId();
     }
+
+    if (ODBC_DEBUG) echo "<p>Executing INSERT with ".count($this->insertValues)." rows</p>\n";
+    if (ODBC_DEBUG) { echo "<pre>Insert fields: "; print_r($this->insertFields); echo "</pre>\n"; }
+
+    if (ODBC_EMULATE_PREPARES) {
+      $queryString = $this->connection->prefixTables((string) $this);
+
+      foreach ($this->insertValues as $insert_index => $insert_values) {
+        $values = array();
+        foreach ($this->insertFields as $field_index => $field) {
+          if (ODBC_DEBUG) echo "Placeholder $field_index -> $field\n";
+          $key = ':db_insert' . $field_index;
+          if (isset($insert_values[$field_index]))
+            $values[$key] = $insert_values[$field_index];
+          else if (ODBC_DEBUG) echo "Warning: missing value for $field\n";
+        }
+
+        $insertString = $this->connection->replacePlaceholders($queryString, $values);
+
+        if (ODBC_DEBUG) {
+          echo "<pre>Precomposing insert: $queryString\n";
+          print_r($values);
+          echo "\nResult: ".$insertString;
+          echo "</pre>\n";
+        }
+
+        $stmt = $this->connection->PDOPrepare($insertString);
+
+        try {
+          $stmt->execute();
+        }
+        catch (Exception $e) {
+          // This INSERT query failed, rollback everything if we started a transaction earlier.
+          if (!empty($transaction)) {
+            $transaction->rollback();
+          }
+          // Rethrow the exception.
+          throw $e;
+        }
+
+        $last_insert_id = $this->connection->lastInsertId();
+      }
+
+      return $last_insert_id;
+    }
+
+
 
     $query = (string) $this;
     $stmt = $this->connection->PDOPrepare($this->connection->prefixTables($query));
@@ -215,6 +284,67 @@ class UpdateQuery_odbc extends UpdateQuery {
 
     // Now perform the special handling for BLOB fields.
     $max_placeholder = 0;
+
+
+    if (ODBC_EMULATE_PREPARES) {
+      $queryString = $this->connection->prefixTables((string)$this);
+      // $columnInformation = $this->connection->schema()->queryColumnInformation($this->table);
+
+      // Expressions take priority over literal fields, so we process those first
+      // and remove any literal fields that conflict.
+      $fields = $this->fields;
+     
+      foreach ($this->expressionFields as $field => $data) {
+        if (!empty($data['arguments'])) {
+          foreach ($data['arguments'] as $placeholder => $argument) {
+            // We assume that an expression will never happen on a BLOB field,
+            // which is a fairly safe assumption to make since in most cases
+            // it would be an invalid query anyway.
+            $stmt->bindParam($placeholder, $data['arguments'][$placeholder]);
+          }
+        }
+        unset($fields[$field]);
+      }
+
+
+      foreach ($fields as $field => $value) {
+        $placeholder = ':db_update_placeholder_' . ($max_placeholder++);
+
+        // if (isset($columnInformation['blobs'][$field])) {
+        //   // fail at blobs
+        //   continue;
+        // }
+        $values[$placeholder] = $value;
+      }
+
+      $updateString = $this->connection->replacePlaceholders($queryString, $values);
+
+
+      if (count($this->condition)) {
+        $this->condition->compile($this->connection, $this);
+
+        $arguments = $this->condition->arguments();
+        // foreach ($arguments as $placeholder => $value) {
+        //   $stmt->bindParam($placeholder, $arguments[$placeholder]);
+        // }
+        $updateString = $this->connection->replacePlaceholders($updateString, $arguments);
+      }
+
+      if (ODBC_DEBUG) {
+        echo "<pre>Precomposing update: $queryString\nValues: ";
+        print_r($values);
+        if ($arguments) {
+          echo "\nArguments: ";
+          print_r($arguments);
+        }
+        echo "\nResult: ".$updateString;
+        echo "</pre>\n";
+      }
+
+      $stmt = $this->connection->PDOPrepare($updateString);
+      $stmt->execute();
+      return $stmt->rowCount();
+    }
 
     // Because we filter $fields the same way here and in __toString(), the
     // placeholders will all match up properly.

@@ -12,6 +12,12 @@
 
 include_once DRUPAL_ROOT . '/includes/database/prefetch.inc';
 
+/*
+ * Emulate ATTR_EMULATE_PREPARES on drivers that don't support it
+ */
+if (!defined('ODBC_EMULATE_PREPARES')) define('ODBC_EMULATE_PREPARES', true);
+if (!defined('ODBC_DEBUG')) define('ODBC_DEBUG', true);
+
 class DatabaseConnection_odbc extends DatabaseConnection {
 
   public $bypassQueryPreprocess = FALSE;
@@ -169,6 +175,11 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     return '';
   }
 
+  public function quote($str, $paramType = PDO::PARAM_STR) {
+    if (is_null($str)) return '';
+    return "'".str_replace("'", "''", $str)."'";
+  }
+
   public function quoteIdentifier($identifier) {
     return '[' . $identifier .']';
   }
@@ -217,34 +228,47 @@ class DatabaseConnection_odbc extends DatabaseConnection {
   /**
    * Internal function: do a manual placeholder replacement for a query.
    */
-  protected function replacePlaceholders($query, array $args = array()) {
+  public function replacePlaceholders($query, array $args = array()) {
+    // if (ODBC_DEBUG) {
+    //   echo "<pre>[RP] Replacing placeholders in query: $query\n[RP] ";
+    //   print_r($args);
+    //   echo "\n";
+    // }
+
     // Check if $args is a simple numeric array.
     if (range(0, count($args) - 1) === array_keys($args)) {
+      // if (ODBC_DEBUG) echo "[RP] Simple array\n";
       // In that case, we have unnamed placeholders.
       $count = 0;
       $new_args = array();
       foreach ($args as $value) {
         if (is_float($value)) {
+          // if (ODBC_DEBUG) echo "[RP] Float value: $value\n";
           // Force the conversion to float so as not to loose precision
           // in the automatic cast.
           $value = sprintf('%F', $value);
         }
         elseif (!is_int($value)) {
+          // if (ODBC_DEBUG) echo "[RP] Quoting value: $value\n";
           $value = $this->quote($value);
         }
+        // if (ODBC_DEBUG) echo "[RP] Replacing value $value\n";
         $query = substr_replace($query, $value, strpos($query, '?'), 1);
       }
       $args = $new_args;
     }
     else {
+      // if (ODBC_DEBUG) echo "[RP] Named placeholders\n";
       // Else, this is using named placeholders.
       foreach ($args as $placeholder => $value) {
         if (is_float($value)) {
+          // if (ODBC_DEBUG) echo "[RP] Float value: $value\n";
           // Force the conversion to float so as not to loose precision
           // in the automatic cast.
           $value = sprintf('%F', $value);
         }
         elseif (!is_int($value)) {
+          // if (ODBC_DEBUG) echo "[RP] Quoting value: $value\n";
           $value = $this->quote((string) $value);
         }
 
@@ -254,12 +278,14 @@ class DatabaseConnection_odbc extends DatabaseConnection {
         if ($placeholder[0] != ':') {
           $placeholder = ":$placeholder";
         }
+        // if (ODBC_DEBUG) echo "[RP] Replacing $placeholder => $value\n";
         // When replacing the placeholders, make sure we search for the
         // exact placeholder. For example, if searching for
         // ':db_placeholder_1', do not replace ':db_placeholder_11'.
         $query = preg_replace('/' . preg_quote($placeholder) . '\b/', $value, $query);
       }
     }
+    // if (ODBC_DEBUG) { echo "Result: $query\n</pre>"; }
     return $query;
   }
 
@@ -406,14 +432,41 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
     }
 
     // Prepare the query.
-    $statement = $this->getStatement($this->queryString, $args);
-    if (!$statement) {
-      $this->throwPDOException();
-    }
+    if (ODBC_EMULATE_PREPARES) {
+      $queryString = $this->dbh->replacePlaceholders($this->queryString, $args);
 
-    $return = $statement->execute($args);
-    if (!$return) {
-      $this->throwPDOException();
+      if (ODBC_DEBUG) {
+        echo "<pre>Precomposing statement: $this->queryString\n";
+        print_r($args);
+        echo "\nResult: ".$queryString;
+        echo "</pre>";
+      }
+
+      $statement = $this->getStatement($queryString);
+      if (!$statement) {
+        $this->throwPDOException();
+      }
+      $return = $statement->execute();
+      if (!$return) {
+        $this->throwPDOException();
+      }
+
+    } else {
+      $statement = $this->getStatement($this->queryString, $args);
+      if (!$statement) {
+        $this->throwPDOException();
+      }
+
+      if (ODBC_DEBUG) {
+        echo "<pre>Preparing statement: $this->queryString\n";
+        print_r($args);
+        echo "</pre>";
+      }
+
+      $return = $statement->execute($args);
+      if (!$return) {
+        $this->throwPDOException();
+      }
     }
 
     // Fetch all the data from the reply, in order to release any lock
