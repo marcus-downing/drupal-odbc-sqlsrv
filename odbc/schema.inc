@@ -55,6 +55,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
       throw new DatabaseSchemaObjectExistsException(t('Table %name already exists.', array('%name' => $name)));
     }
 
+    if (ODBC_DEBUG) echo "<p>Creating table: $name</p>\n";
     // Build the table and its unique keys in a transaction, and fail the whole
     // creation in case of an error.
     $transaction = $this->connection->startTransaction();
@@ -96,9 +97,11 @@ class DatabaseSchema_odbc extends DatabaseSchema {
   public function tableExists($table) {
     try {
       $this->connection->query('SELECT TOP(1) 1 FROM {' . $table . '}');
+      if (ODBC_DEBUG) echo "<p>Table exists: $table</p>\n";
       return TRUE;
     }
     catch (PDOException $e) {
+      if (ODBC_DEBUG) echo "<p>Table does not exist: $table</p>\n";
       return FALSE;
     }
   }
@@ -705,10 +708,10 @@ class DatabaseSchema_odbc extends DatabaseSchema {
     $column_expression = array();
     foreach ($fields as $field) {
       if (is_array($field)) {
-        $column_expression[] = 'SUBSTRING(CAST(' . $field[0] . ' AS text),1,' . $field[1] . ')';
+        $column_expression[] = 'SUBSTRING(CAST(' . $field[0] . ' AS varchar(1024)),1,' . $field[1] . ')';
       }
       else {
-        $column_expression[] = 'CAST(' . $field . ' AS text)';
+        $column_expression[] = 'CAST(' . $field . ' AS varchar(1024))';
       }
     }
     $column_expression = implode(' + ', $column_expression);

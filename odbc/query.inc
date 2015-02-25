@@ -108,7 +108,7 @@ class InsertQuery_odbc extends InsertQuery {
       foreach ($this->insertValues as $insert_index => $insert_values) {
         $values = array();
         foreach ($this->insertFields as $field_index => $field) {
-          if (ODBC_DEBUG) echo "Placeholder $field_index -> $field\n";
+          // if (ODBC_DEBUG) echo "Placeholder $field_index -> $field\n";
           $key = ':db_insert' . $field_index;
           if (isset($insert_values[$field_index]))
             $values[$key] = $insert_values[$field_index];
@@ -280,7 +280,7 @@ class UpdateQuery_odbc extends UpdateQuery {
 
   public function execute() {
     // Rewrite the query to exclude the non-affected rows.
-    $this->excludeNonAffectedRows();
+    // $this->excludeNonAffectedRows();
 
     // Now perform the special handling for BLOB fields.
     $max_placeholder = 0;

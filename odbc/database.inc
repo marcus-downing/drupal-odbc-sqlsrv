@@ -16,6 +16,7 @@ include_once DRUPAL_ROOT . '/includes/database/prefetch.inc';
  * Emulate ATTR_EMULATE_PREPARES on drivers that don't support it
  */
 if (!defined('ODBC_EMULATE_PREPARES')) define('ODBC_EMULATE_PREPARES', true);
+if (!defined('ODBC_FORGIVING')) define('ODBC_FORGIVING', true);
 if (!defined('ODBC_DEBUG')) define('ODBC_DEBUG', true);
 
 class DatabaseConnection_odbc extends DatabaseConnection {
@@ -397,6 +398,12 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     return $this->query('INSERT INTO {sequences} DEFAULT VALUES', array(), array('return' => Database::RETURN_INSERT_ID));
   }
 
+  public function lastInsertId($name = null) {
+    $last = $this->query('SELECT @@IDENTITY')->fetchField();
+    if (ODBC_DEBUG) echo "<p>Last insert ID: $last</p>\n";
+    return $last;
+  }
+
   /**
    * Override DatabaseConnection::escapeTable().
    *
@@ -433,13 +440,14 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
 
     // Prepare the query.
     if (ODBC_EMULATE_PREPARES) {
-      $queryString = $this->dbh->replacePlaceholders($this->queryString, $args);
+      $queryString = $this->dbh->prefixTables($this->queryString);
+      $queryString = $this->dbh->replacePlaceholders($queryString, $args);
 
       if (ODBC_DEBUG) {
         echo "<pre>Precomposing statement: $this->queryString\n";
         print_r($args);
         echo "\nResult: ".$queryString;
-        echo "</pre>";
+        echo "</pre>\n";
       }
 
       $statement = $this->getStatement($queryString);
@@ -460,7 +468,7 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
       if (ODBC_DEBUG) {
         echo "<pre>Preparing statement: $this->queryString\n";
         print_r($args);
-        echo "</pre>";
+        echo "</pre>\n";
       }
 
       $return = $statement->execute($args);
