@@ -235,15 +235,57 @@ class DatabaseSchema_odbc extends DatabaseSchema {
     // Put :normal last so it gets preserved by array_flip.  This makes
     // it much easier for modules (such as schema.module) to map
     // database types back into schema types.
+
+    // If working around Microsoft ODBC driver's varbinary bug, use text field instead.
+    if (ODBC_USE_TEXT)
+      return array(
+        'varchar:normal' => 'nvarchar',
+        'char:normal' => 'nchar',
+
+        'text:tiny' => 'text',
+        'text:small' => 'text',
+        'text:medium' => 'text',
+        'text:big' => 'text',
+        'text:normal' => 'text',
+
+        'serial:tiny'     => 'smallint',
+        'serial:small'    => 'smallint',
+        'serial:medium'   => 'int',
+        'serial:big'      => 'bigint',
+        'serial:normal'   => 'int',
+
+        'int:tiny' => 'smallint',
+        'int:small' => 'smallint',
+        'int:medium' => 'int',
+        'int:big' => 'bigint',
+        'int:normal' => 'int',
+
+        'float:tiny' => 'real',
+        'float:small' => 'real',
+        'float:medium' => 'real',
+        'float:big' => 'float(53)',
+        'float:normal' => 'real',
+
+        'numeric:normal' => 'numeric',
+
+        'blob:big' => 'text',
+        'blob:normal' => 'text',
+
+        'datetime:normal' => 'timestamp',
+        'date:normal'     => 'date',
+        'datetime:normal' => 'datetime2(0)',
+        'time:normal'     => 'time(0)',
+      );
+
     return array(
       'varchar:normal' => 'nvarchar',
       'char:normal' => 'nchar',
 
-      'text:tiny' => 'text',
-      'text:small' => 'text',
-      'text:medium' => 'text',
-      'text:big' => 'text',
-      'text:normal' => 'text',
+      'text:tiny' => 'nvarchar(max)',
+      'text:small' => 'nvarchar(max)',
+      'text:medium' => 'nvarchar(max)',
+      'text:big' => 'nvarchar(max)',
+      'text:normal' => 'nvarchar(max)',
 
       'serial:tiny'     => 'smallint',
       'serial:small'    => 'smallint',
@@ -265,8 +307,8 @@ class DatabaseSchema_odbc extends DatabaseSchema {
 
       'numeric:normal' => 'numeric',
 
-      'blob:big' => 'text',
-      'blob:normal' => 'text',
+      'blob:big' => 'varbinary(max)',
+      'blob:normal' => 'varbinary(max)',
 
       'datetime:normal' => 'timestamp',
       'date:normal'     => 'date',
@@ -704,14 +746,16 @@ class DatabaseSchema_odbc extends DatabaseSchema {
 
     $this->createTechnicalPrimaryColumn($table);
 
+    $intermediateFormat = ODBC_USE_TEXT ? 'varbinary(8000)' : 'varbinary(max)';
+
     // Then, build a expression based on the columns.
     $column_expression = array();
     foreach ($fields as $field) {
       if (is_array($field)) {
-        $column_expression[] = 'SUBSTRING(CAST(' . $field[0] . ' AS varchar(1024)),1,' . $field[1] . ')';
+        $column_expression[] = 'SUBSTRING(CAST(' . $field[0] . ' AS '.$intermediateFormat.'),1,' . $field[1] . ')';
       }
       else {
-        $column_expression[] = 'CAST(' . $field . ' AS varchar(1024))';
+        $column_expression[] = 'CAST(' . $field . ' AS '.$intermediateFormat.')';
       }
     }
     $column_expression = implode(' + ', $column_expression);
@@ -720,7 +764,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
     // values with the globally unique identifier generated previously.
     // This is (very) unlikely to result in a collision with any actual value
     // in the columns of the unique key.
-    $this->connection->query('ALTER TABLE {' . $table . '} ADD __unique_' . $name . " AS CAST(HashBytes('MD4', COALESCE(" . $column_expression . ", CAST(__pk AS text))) AS varbinary(16))");
+    $this->connection->query('ALTER TABLE {' . $table . '} ADD __unique_' . $name . " AS CAST(HashBytes('MD4', COALESCE(" . $column_expression . ", CAST(__pk AS ".$intermediateFormat."))) AS varbinary(16))");
     $this->connection->query('CREATE UNIQUE INDEX ' . $name . '_unique ON [{' . $table . '}] (__unique_' . $name . ')');
   }
 

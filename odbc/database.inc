@@ -18,6 +18,7 @@ include_once DRUPAL_ROOT . '/includes/database/prefetch.inc';
 if (!defined('ODBC_EMULATE_PREPARES')) define('ODBC_EMULATE_PREPARES', true);
 if (!defined('ODBC_FORGIVING')) define('ODBC_FORGIVING', true);
 if (!defined('ODBC_DEBUG')) define('ODBC_DEBUG', true);
+if (!defined('ODBC_USE_TEXT')) define('ODBC_USE_TEXT', true);
 
 class DatabaseConnection_odbc extends DatabaseConnection {
 
