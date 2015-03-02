@@ -1,5 +1,8 @@
 <?php
 
+if (!defined('ODBC_DEBUG')) define('ODBC_DEBUG', false);
+if (ODBC_DEBUG) echo "<p>Loading query.inc</p>\n";
+
 /**
  * SQL Server-specific implementation of INSERT.
  *

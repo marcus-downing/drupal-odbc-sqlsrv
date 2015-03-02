@@ -17,8 +17,9 @@ include_once DRUPAL_ROOT . '/includes/database/prefetch.inc';
  */
 if (!defined('ODBC_EMULATE_PREPARES')) define('ODBC_EMULATE_PREPARES', true);
 if (!defined('ODBC_FORGIVING')) define('ODBC_FORGIVING', true);
-if (!defined('ODBC_DEBUG')) define('ODBC_DEBUG', true);
+if (!defined('ODBC_DEBUG')) define('ODBC_DEBUG', false);
 if (!defined('ODBC_USE_TEXT')) define('ODBC_USE_TEXT', true);
+if (ODBC_DEBUG) echo "<p>Loading database.inc</p>\n";
 
 class DatabaseConnection_odbc extends DatabaseConnection {
 
@@ -48,6 +49,8 @@ class DatabaseConnection_odbc extends DatabaseConnection {
    * @status complete
    */
   public function __construct(array $connection_options = array()) {
+    if (ODBC_DEBUG) echo "<h1>ODBC Driver: Debug on</h1>\n";
+
     // Store connection options for future reference.
     $this->connectionOptions = $connection_options;
 

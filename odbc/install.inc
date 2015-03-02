@@ -1,5 +1,8 @@
 <?php
 
+if (!defined('ODBC_DEBUG')) define('ODBC_DEBUG', false);
+if (ODBC_DEBUG) echo "<p>Loading install.inc</p>\n";
+
 // ODBC specific install functions
 
 class DatabaseTasks_odbc extends DatabaseTasks {

@@ -1,5 +1,8 @@
 <?php
 
+if (!defined('ODBC_DEBUG')) define('ODBC_DEBUG', false);
+if (ODBC_DEBUG) echo "<p>Loading select.inc</p>\n";
+
 class SelectQuery_odbc extends SelectQuery {
 
   /**

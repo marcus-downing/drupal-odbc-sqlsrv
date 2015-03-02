@@ -1,5 +1,8 @@
 <?php
 
+if (!defined('ODBC_DEBUG')) define('ODBC_DEBUG', false);
+if (ODBC_DEBUG) echo "<p>Loading schema.inc</p>\n";
+
 /**
  * @file
  * Database schema code for ODBC / Microsoft SQL Server database servers.
@@ -820,6 +823,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
    * @status tested
    */
   public function dropIndex($table, $name) {
+    if (!$this->indexExists($table, $name)) {
     if (!$this->indexExists($table, $name)) {
       return FALSE;
     }
