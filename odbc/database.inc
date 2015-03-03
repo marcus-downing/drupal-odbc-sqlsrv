@@ -12,12 +12,22 @@
 
 include_once DRUPAL_ROOT . '/includes/database/prefetch.inc';
 
-/*
+/**
  * Emulate ATTR_EMULATE_PREPARES on drivers that don't support it
  */
 if (!defined('ODBC_EMULATE_PREPARES')) define('ODBC_EMULATE_PREPARES', true);
+
+/**
+ * Swallow some exceptions and log the errors instead
+ */
 if (!defined('ODBC_FORGIVING')) define('ODBC_FORGIVING', true);
+
+/**
+ * Use the deprecated but more compatible `text` data type in place of `varchar` and `varbinary`
+ */
 if (!defined('ODBC_USE_TEXT')) define('ODBC_USE_TEXT', true);
+
+
 
 class DatabaseConnection_odbc extends DatabaseConnection {
 
