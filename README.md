@@ -91,12 +91,12 @@ Description     = FreeTDS
 Driver          = /usr/lib64/libtdsodbc.so
 Setup           = /usr/lib64/libtdsS.so.2
 Trace           = Yes
-TraceFile	= /var/log/freetdsodbc.log
-ForceTrace	= Yes
-UsageCount	= 1
+TraceFile       = /var/log/freetdsodbc.log
+ForceTrace      = Yes
+UsageCount      = 1
 ```
 
-Again, check the precise location of the library files yourself.
+Again, check the precise location of the library files yourself. Again, you must include the spaces.
 
 ### Drupal config
 
