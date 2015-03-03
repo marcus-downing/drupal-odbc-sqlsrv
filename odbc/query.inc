@@ -309,7 +309,7 @@ class UpdateQuery_odbc extends UpdateQuery {
         unset($fields[$field]);
       }
 
-
+      $values = array();
       foreach ($fields as $field => $value) {
         $placeholder = ':db_update_placeholder_' . ($max_placeholder++);
 
