@@ -1,5 +1,5 @@
 
-# ODBC driver for Drupal 7, forked for SQL Server connection
+# ODBC driver for Drupal 7 and SQL Server
 
 This is a fork of [the ODBC Driver for Drupal 7](https://www.drupal.org/sandbox/pstewart/2010758). This fork uses precomposed queries to work around a bug in SQL Server 2008 R2 and earlier that breaks prepared statements on ODBC.
 
@@ -10,7 +10,7 @@ Good question. The preferred way of running Drupal on SQL Server is to use [the 
 
 But if for some reason you need to run the web server on Linux, but talk to a SQL Server instance running on Windows, this driver can help.
 
-Beware that this way of connecting has problems with binary data. We recommend all `varbinary(max)` and `varchar(max)` fields get turned into `text`.
+Beware that this way of connecting has problems with binary data (`varchar(max)` and `varbinary(max)`).
 See below for details on converting fields to a format that works.
 
 Beware also that performance of this driver will never be top notch.
@@ -79,11 +79,13 @@ Note that the value of `odbc_driver` must match up to the name you gave it in th
 ## Binary data
 
 The Microsoft driver for Linux has a problem with binary data at maximum size.
-It copes fine up to the highest fixed size (`varchar(8000)`, `nvarchar(8000)` and `varbinary(8000)`), but chokes on unlimited size fields (`varchar(max)`, `nvarchar(8000)` and `varbinary(max)`).
+It copes fine up to the highest fixed size (`varchar(8000)`, `nvarchar(8000)` and `varbinary(8000)`), but chokes on unlimited size fields (`varchar(max)`, `nvarchar(max)` and `varbinary(max)`).
 I've found it works significantly better if these fields are converted either to `text` if they need to be massive, or a `varchar` or limited size if they need to be used as keys.
 
 
 ### Converting an existing database
+
+Depending what modules you have install, Drupal uses a lot of tables. Copying data from MySQL to SQL Server is less than obvious.
 
 In the `convert/` directory of this module you'll find a number of scripts for reading settings from a MySQL database and writing SQL scripts to import them into a SQL Server database.
 The actual data is copied using ODBC, which you must enable on your MySQL server first.
