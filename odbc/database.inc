@@ -44,6 +44,15 @@ class DatabaseConnection_odbc extends DatabaseConnection {
   }
 
   /**
+   * Override of DatabaseConnection::version().
+   */
+  public function version() {
+    $last = $this->query('SELECT @@VERSION')->fetchField();
+    if (ODBC_DEBUG) echo "<p>Last insert ID: $last</p>\n";
+    return $last;
+  }
+
+  /**
    * Override of DatabaseConnection::databaseType().
    *
    * @status complete
