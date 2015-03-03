@@ -33,7 +33,7 @@ To use this driver, you'll first need to install these components:
 
 Edit your ODBC instance settings, which are probably at `/etc/odbcinst.ini`.
 
-```
+```ini
 [SQL Server]
 Description     = Microsoft SQL Server ODBC Driver V1.0 for Linux
 Driver          = /opt/microsoft/sqlncli/lib64/libsqlncli-11.0.so.1790.0
