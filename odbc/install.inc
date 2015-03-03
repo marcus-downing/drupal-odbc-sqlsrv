@@ -10,7 +10,7 @@ class DatabaseTasks_odbc extends DatabaseTasks {
   protected $pdoDriver = 'odbc';
 
   public function name() {
-    return 'ODBC';
+    return 'ODBC for SQL Server';
   }
 
   public function __construct() {
