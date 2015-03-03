@@ -1,7 +1,5 @@
 <?php
 
-if (!defined('ODBC_DEBUG')) define('ODBC_DEBUG', false);
-if (ODBC_DEBUG) echo "<p>Loading install.inc</p>\n";
 
 // ODBC specific install functions
 
@@ -10,7 +8,7 @@ class DatabaseTasks_odbc extends DatabaseTasks {
   protected $pdoDriver = 'odbc';
 
   public function name() {
-    return 'ODBC for SQL Server';
+    return 'ODBC for SQL Server (<a href="https://github.com/marcusatbang/drupal-odbc-sqlsrv">GitHub</a>)';
   }
 
   public function __construct() {

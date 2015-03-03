@@ -1,8 +1,5 @@
 <?php
 
-if (!defined('ODBC_DEBUG')) define('ODBC_DEBUG', false);
-if (ODBC_DEBUG) echo "<p>Loading schema.inc</p>\n";
-
 /**
  * @file
  * Database schema code for ODBC / Microsoft SQL Server database servers.
@@ -54,11 +51,13 @@ class DatabaseSchema_odbc extends DatabaseSchema {
     $this->additionalColumnInformation = NULL;
 
     if ($this->tableExists($name)) {
-      if (ODBC_FORGIVING) return;
+      if (ODBC_FORGIVING) {
+        $this->connection->watchdog('Table %name already exists', array('%name' => $name));
+        return;
+      }
       throw new DatabaseSchemaObjectExistsException(t('Table %name already exists.', array('%name' => $name)));
     }
 
-    if (ODBC_DEBUG) echo "<p>Creating table: $name</p>\n";
     // Build the table and its unique keys in a transaction, and fail the whole
     // creation in case of an error.
     $transaction = $this->connection->startTransaction();
@@ -100,11 +99,9 @@ class DatabaseSchema_odbc extends DatabaseSchema {
   public function tableExists($table) {
     try {
       $this->connection->query('SELECT TOP(1) 1 FROM {' . $table . '}');
-      if (ODBC_DEBUG) echo "<p>Table exists: $table</p>\n";
       return TRUE;
     }
     catch (PDOException $e) {
-      if (ODBC_DEBUG) echo "<p>Table does not exist: $table</p>\n";
       return FALSE;
     }
   }
@@ -327,9 +324,17 @@ class DatabaseSchema_odbc extends DatabaseSchema {
    */
   public function renameTable($table, $new_name) {
     if (!$this->tableExists($table)) {
+      if (ODBC_FORGIVING) {
+        $this->connection->watchdog("Cannot rename %table to %table_new: table %table doesn't exist.", array('%table' => $table, '%table_new' => $new_name));
+        return;
+      }
       throw new DatabaseSchemaObjectDoesNotExistException(t("Cannot rename %table to %table_new: table %table doesn't exist.", array('%table' => $table, '%table_new' => $new_name)));
     }
     if ($this->tableExists($new_name)) {
+      if (ODBC_FORGIVING) {
+        $this->connection->watchdog("Cannot rename %table to %table_new: table %table_new already exists.", array('%table' => $table, '%table_new' => $new_name));
+        return;
+      }
       throw new DatabaseSchemaObjectExistsException(t("Cannot rename %table to %table_new: table %table_new already exists.", array('%table' => $table, '%table_new' => $new_name)));
     }
 
@@ -395,7 +400,10 @@ class DatabaseSchema_odbc extends DatabaseSchema {
       throw new DatabaseSchemaObjectDoesNotExistException(t("Cannot add field %table.%field: table doesn't exist.", array('%field' => $field, '%table' => $table)));
     }
     if ($this->fieldExists($table, $field)) {
-      if (ODBC_FORGIVING) return;
+      if (ODBC_FORGIVING) {
+        $this->connection->watchdog("Cannot add field %table.%field: field already exists.", array('%field' => $field, '%table' => $table));
+        return;
+      }
       throw new DatabaseSchemaObjectExistsException(t("Cannot add field %table.%field: field already exists.", array('%field' => $field, '%table' => $table)));
     }
 

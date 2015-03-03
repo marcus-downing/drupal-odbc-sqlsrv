@@ -1,8 +1,5 @@
 <?php
 
-if (!defined('ODBC_DEBUG')) define('ODBC_DEBUG', false);
-if (ODBC_DEBUG) echo "<p>Loading query.inc</p>\n";
-
 /**
  * SQL Server-specific implementation of INSERT.
  *
@@ -12,7 +9,6 @@ if (ODBC_DEBUG) echo "<p>Loading query.inc</p>\n";
 class InsertQuery_odbc extends InsertQuery {
 
   public function execute() {
-    if (ODBC_DEBUG) echo "Executing INSERT: $this\n";
     if (!$this->preExecute()) {
       return NULL;
     }
@@ -35,24 +31,14 @@ class InsertQuery_odbc extends InsertQuery {
     }
 
     if (!empty($this->fromQuery)) {
-      if (ODBC_DEBUG) echo "Executing INSERT from query\n";
       // Re-initialize the values array so that we can re-use this query.
       $this->insertValues = array();
 
       if (ODBC_EMULATE_PREPARES) {
         $queryString = $this->connection->prefixTables((string) $this);
         $values = $this->fromQuery->getArguments();
-        if (ODBC_DEBUG) {
-          echo "<pre>Precomposing insert: $queryString\n";
-          print_r($values);
-        }
 
         $queryString = $this->connection->replacePlaceholders($queryString, $values);
-
-        if (ODBC_DEBUG) {
-          echo "\nResult: ".$queryString;
-          echo "</pre>\n";
-        }
 
         $stmt = $this->connection->PDOPrepare($queryString);
       } else {
@@ -81,7 +67,6 @@ class InsertQuery_odbc extends InsertQuery {
 
     // Handle the case of full-default queries.
     if (empty($this->fromQuery) && (empty($this->insertFields) || empty($this->insertValues))) {
-      if (ODBC_DEBUG) echo "<p>Executing INSERT full default</p>\n";
 
       // Re-initialize the values array so that we can re-use this query.
       $this->insertValues = array();
@@ -102,30 +87,20 @@ class InsertQuery_odbc extends InsertQuery {
       return $this->connection->lastInsertId();
     }
 
-    if (ODBC_DEBUG) echo "<p>Executing INSERT with ".count($this->insertValues)." rows</p>\n";
-    if (ODBC_DEBUG) { echo "<pre>Insert fields: "; print_r($this->insertFields); echo "</pre>\n"; }
-
     if (ODBC_EMULATE_PREPARES) {
       $queryString = $this->connection->prefixTables((string) $this);
 
       foreach ($this->insertValues as $insert_index => $insert_values) {
         $values = array();
         foreach ($this->insertFields as $field_index => $field) {
-          // if (ODBC_DEBUG) echo "Placeholder $field_index -> $field\n";
+          
           $key = ':db_insert' . $field_index;
           if (isset($insert_values[$field_index]))
             $values[$key] = $insert_values[$field_index];
-          else if (ODBC_DEBUG) echo "Warning: missing value for $field\n";
+          else $this->connection->watchdog('Missing value for %field when running %query', array('%field' => $field, '%query' => $queryString));
         }
 
         $insertString = $this->connection->replacePlaceholders($queryString, $values);
-
-        if (ODBC_DEBUG) {
-          echo "<pre>Precomposing insert: $queryString\n";
-          print_r($values);
-          echo "\nResult: ".$insertString;
-          echo "</pre>\n";
-        }
 
         $stmt = $this->connection->PDOPrepare($insertString);
 
@@ -331,17 +306,6 @@ class UpdateQuery_odbc extends UpdateQuery {
         //   $stmt->bindParam($placeholder, $arguments[$placeholder]);
         // }
         $updateString = $this->connection->replacePlaceholders($updateString, $arguments);
-      }
-
-      if (ODBC_DEBUG) {
-        echo "<pre>Precomposing update: $queryString\nValues: ";
-        print_r($values);
-        if ($arguments) {
-          echo "\nArguments: ";
-          print_r($arguments);
-        }
-        echo "\nResult: ".$updateString;
-        echo "</pre>\n";
       }
 
       $stmt = $this->connection->PDOPrepare($updateString);

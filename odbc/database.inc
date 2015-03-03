@@ -17,13 +17,13 @@ include_once DRUPAL_ROOT . '/includes/database/prefetch.inc';
  */
 if (!defined('ODBC_EMULATE_PREPARES')) define('ODBC_EMULATE_PREPARES', true);
 if (!defined('ODBC_FORGIVING')) define('ODBC_FORGIVING', true);
-if (!defined('ODBC_DEBUG')) define('ODBC_DEBUG', false);
 if (!defined('ODBC_USE_TEXT')) define('ODBC_USE_TEXT', true);
-if (ODBC_DEBUG) echo "<p>Loading database.inc</p>\n";
 
 class DatabaseConnection_odbc extends DatabaseConnection {
 
   public $bypassQueryPreprocess = FALSE;
+
+  private $debug = FALSE;
 
   /**
    * Override of DatabaseConnection::driver().
@@ -47,9 +47,19 @@ class DatabaseConnection_odbc extends DatabaseConnection {
    * Override of DatabaseConnection::version().
    */
   public function version() {
-    $last = $this->query('SELECT @@VERSION')->fetchField();
-    if (ODBC_DEBUG) echo "<p>Last insert ID: $last</p>\n";
-    return $last;
+    $version = $this->query('SELECT @@VERSION')->fetchField();
+    $this->watchdog('Server version: %version', array('%version' => $version));
+    return $version;
+  }
+
+  /**
+   * Function to log
+   * Note that we can't assume WATCHDOG_NOTICE is defined, so we use the number 5
+   */
+  public function watchdog($message, $variables, $severity = 5, $link) {
+    if (!$this->debug)
+      return;
+    watchdog('odbc-sqlsrv', $message, $variables, $severity, $link);
   }
 
   /**
@@ -58,7 +68,9 @@ class DatabaseConnection_odbc extends DatabaseConnection {
    * @status complete
    */
   public function __construct(array $connection_options = array()) {
-    if (ODBC_DEBUG) echo "<h1>ODBC Driver: Debug on</h1>\n";
+    $this->debug = isset($connection_options['debug']) && $connection_options['debug'] && is_callable('watchdog');
+
+    $this->watchdog('ODBC driver for SQL Server: Debug on');
 
     // Store connection options for future reference.
     $this->connectionOptions = $connection_options;
@@ -243,46 +255,33 @@ class DatabaseConnection_odbc extends DatabaseConnection {
    * Internal function: do a manual placeholder replacement for a query.
    */
   public function replacePlaceholders($query, array $args = array()) {
-    // if (ODBC_DEBUG) {
-    //   echo "<pre>[RP] Replacing placeholders in query: $query\n[RP] ";
-    //   print_r($args);
-    //   echo "\n";
-    // }
-
     // Check if $args is a simple numeric array.
     if (range(0, count($args) - 1) === array_keys($args)) {
-      // if (ODBC_DEBUG) echo "[RP] Simple array\n";
       // In that case, we have unnamed placeholders.
       $count = 0;
       $new_args = array();
       foreach ($args as $value) {
         if (is_float($value)) {
-          // if (ODBC_DEBUG) echo "[RP] Float value: $value\n";
           // Force the conversion to float so as not to loose precision
           // in the automatic cast.
           $value = sprintf('%F', $value);
         }
         elseif (!is_int($value)) {
-          // if (ODBC_DEBUG) echo "[RP] Quoting value: $value\n";
           $value = $this->quote($value);
         }
-        // if (ODBC_DEBUG) echo "[RP] Replacing value $value\n";
         $query = substr_replace($query, $value, strpos($query, '?'), 1);
       }
       $args = $new_args;
     }
     else {
-      // if (ODBC_DEBUG) echo "[RP] Named placeholders\n";
       // Else, this is using named placeholders.
       foreach ($args as $placeholder => $value) {
         if (is_float($value)) {
-          // if (ODBC_DEBUG) echo "[RP] Float value: $value\n";
           // Force the conversion to float so as not to loose precision
           // in the automatic cast.
           $value = sprintf('%F', $value);
         }
         elseif (!is_int($value)) {
-          // if (ODBC_DEBUG) echo "[RP] Quoting value: $value\n";
           $value = $this->quote((string) $value);
         }
 
@@ -292,14 +291,13 @@ class DatabaseConnection_odbc extends DatabaseConnection {
         if ($placeholder[0] != ':') {
           $placeholder = ":$placeholder";
         }
-        // if (ODBC_DEBUG) echo "[RP] Replacing $placeholder => $value\n";
         // When replacing the placeholders, make sure we search for the
         // exact placeholder. For example, if searching for
         // ':db_placeholder_1', do not replace ':db_placeholder_11'.
         $query = preg_replace('/' . preg_quote($placeholder) . '\b/', $value, $query);
       }
     }
-    // if (ODBC_DEBUG) { echo "Result: $query\n</pre>"; }
+    
     return $query;
   }
 
@@ -413,7 +411,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
 
   public function lastInsertId($name = null) {
     $last = $this->query('SELECT @@IDENTITY')->fetchField();
-    if (ODBC_DEBUG) echo "<p>Last insert ID: $last</p>\n";
+    $this->watchdog('Last insert ID: %id', array('%id' => $last));
     return $last;
   }
 
@@ -456,13 +454,6 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
       $queryString = $this->dbh->prefixTables($this->queryString);
       $queryString = $this->dbh->replacePlaceholders($queryString, $args);
 
-      if (ODBC_DEBUG) {
-        echo "<pre>Precomposing statement: $this->queryString\n";
-        print_r($args);
-        echo "\nResult: ".$queryString;
-        echo "</pre>\n";
-      }
-
       $statement = $this->getStatement($queryString);
       if (!$statement) {
         $this->throwPDOException();
@@ -476,12 +467,6 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
       $statement = $this->getStatement($this->queryString, $args);
       if (!$statement) {
         $this->throwPDOException();
-      }
-
-      if (ODBC_DEBUG) {
-        echo "<pre>Preparing statement: $this->queryString\n";
-        print_r($args);
-        echo "</pre>\n";
       }
 
       $return = $statement->execute($args);
