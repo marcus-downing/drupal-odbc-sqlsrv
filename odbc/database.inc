@@ -56,7 +56,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
    * Function to log
    * Note that we can't assume WATCHDOG_NOTICE is defined, so we use the number 5
    */
-  public function watchdog($message, $variables, $severity = 5, $link) {
+  public function watchdog($message, $variables = array(), $severity = 5, $link = null) {
     if (!$this->debug)
       return;
     watchdog('odbc-sqlsrv', $message, $variables, $severity, $link);
