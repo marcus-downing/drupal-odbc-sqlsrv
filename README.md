@@ -62,14 +62,14 @@ You'll need to put a config like this in your settings file (probably something 
 <?php
 
 $databases['default']['default'] = array(
-  'driver' => 'odbc',
-  'odbc_driver' => 'SQL Server',
-  'host' => '<hostname>',
-  'port' => 1433,
-  'database' => '<database name>',
-  'username' => '<username>',
-  'password' => '<password>',
-  'prefix' => '',
+  'driver'        => 'odbc',
+  'odbc_driver'   => 'SQL Server',
+  'host'          => '<hostname>',
+  'port'          => 1433,
+  'database'      => '<database name>',
+  'username'      => '<username>',
+  'password'      => '<password>',
+  'prefix'        => '',
 );
 ```
 
@@ -104,15 +104,15 @@ Again, check the precise location of the library files yourself. Again, you must
 <?php
 
 $databases['default']['default'] = array(
-  'driver' => 'odbc',
-  'odbc_driver' => 'FreeTDS',
-  'tds_version' => '8.0'
-  'host' => '<hostname>',
-  'port' => 1433,
-  'database' => '<database name>',
-  'username' => '<username>',
-  'password' => '<password>',
-  'prefix' => '',
+  'driver'        => 'odbc',
+  'odbc_driver'   => 'FreeTDS',
+  'tds_version'   => '8.0'
+  'host'          => '<hostname>',
+  'port'          => 1433,
+  'database'      => '<database name>',
+  'username'      => '<username>',
+  'password'      => '<password>',
+  'prefix'        => '',
 );
 ```
 
