@@ -37,11 +37,11 @@ Edit your ODBC instance settings, which are probably at `/etc/odbcinst.ini`.
 [SQL Server]
 Description     = Microsoft SQL Server ODBC Driver V1.0 for Linux
 Driver          = /opt/microsoft/sqlncli/lib64/libsqlncli-11.0.so.1790.0
-UsageCount	= 1
-Threading	= 1
+UsageCount      = 1
+Threading       = 1
 Trace           = Yes
-TraceFile	= /var/log/mssqlsrvodbc.log
-ForceTrace	= Yes
+TraceFile       = /var/log/mssqlsrvodbc.log
+ForceTrace      = Yes
 ```
 
 Check the location of the `Driver` value for yourself, as it may be different.
