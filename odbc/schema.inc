@@ -824,7 +824,6 @@ class DatabaseSchema_odbc extends DatabaseSchema {
    */
   public function dropIndex($table, $name) {
     if (!$this->indexExists($table, $name)) {
-    if (!$this->indexExists($table, $name)) {
       return FALSE;
     }
 
