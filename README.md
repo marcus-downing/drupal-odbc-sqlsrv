@@ -44,9 +44,9 @@ TraceFile       = /var/log/mssqlsrvodbc.log
 ForceTrace      = Yes
 ```
 
-Check the location of the `Driver` value for yourself, as it may be different.
+Check the location of the `Driver` value for yourself, as it may be different. Note that you **must include the spaces** in the above file, otherwise it won't work.
 
-Note that you **must include the spaces** in the above file, otherwise it won't work.
+Be aware that this driver **does not** use the connections you define in `/etc/odbc.ini`, which is why the connection settings below need to use the full hostname and port, not a short name.
 
 
 ### This module
@@ -74,6 +74,49 @@ $databases['default']['default'] = array(
 ```
 
 Note that the value of `odbc_driver` must match up to the name you gave it in the ODBC settings.
+
+
+## Alternatively, FreeTDS
+
+[FreeTDS](http://www.freetds.org/) is an open source Linux driver for SQL Server and Sybase databases.
+This module has not been thoroughly tested on FreeTDS, so you are likely to encounter errors.
+
+### ODBC settings
+
+Put a settings block for FreeTDS into your ODBC instance settings (probably `/etc/odbcinst.ini`).
+
+```ini
+[FreeTDS]
+Description     = FreeTDS
+Driver          = /usr/lib64/libtdsodbc.so
+Setup           = /usr/lib64/libtdsS.so.2
+Trace           = Yes
+TraceFile	= /var/log/freetdsodbc.log
+ForceTrace	= Yes
+UsageCount	= 1
+```
+
+Again, check the precise location of the library files yourself.
+
+### Drupal config
+
+```php
+<?php
+
+$databases['default']['default'] = array(
+  'driver' => 'odbc',
+  'odbc_driver' => 'FreeTDS',
+  'tds_version' => '8.0'
+  'host' => '<hostname>',
+  'port' => 1433,
+  'database' => '<database name>',
+  'username' => '<username>',
+  'password' => '<password>',
+  'prefix' => '',
+);
+```
+
+Note the addition of the `tds_version` field.
 
 
 ## Binary data
