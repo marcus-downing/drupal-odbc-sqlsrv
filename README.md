@@ -80,6 +80,31 @@ $databases['default']['default'] = array(
 
 Note that the value of `odbc_driver` must match up to the name you gave it in the ODBC settings. The name `'SQL Server Native Client 11.0'` should be the default when the Microsoft driver is installed.
 
+Other settings include:
+
+```php
+  'use_text' => true,
+```
+
+Whether to use the `text` type for large binary fields rather than `varchar(max)` and `varbinary(max)`. Defaults to `true`.
+
+```
+  'transactions' => false,
+```
+
+Whether to use transactions. Defaults to `false`.
+
+```
+  'encoding' => 'quoted-printable',
+```
+
+How to encode Unicode content in text fields. Defaults to `quoted-printable`.
+
+```
+  'debug' => true,
+```
+
+Whether to use Dblog (formerly Watchdog) to record information about queries and errors. Defaults to `false`.
 
 ## Alternatively, FreeTDS
 
