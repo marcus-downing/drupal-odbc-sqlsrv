@@ -28,6 +28,7 @@ To use this driver, you'll first need to install these components:
  * [odbcUNIX](http://www.unixodbc.org/)
  * Drupal, obviously
 
+FreeTLS is an alternative to the Microsoft driver. See notes near the bottom.
 
 ### ODBC settings
 
