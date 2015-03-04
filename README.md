@@ -88,19 +88,19 @@ Other settings include:
 
 Whether to use the `text` type for large binary fields rather than `varchar(max)` and `varbinary(max)`. Defaults to `true`.
 
-```
+```php
   'transactions' => false,
 ```
 
 Whether to use transactions. Defaults to `false`.
 
-```
+```php
   'encoding' => 'quoted-printable',
 ```
 
 How to encode Unicode content in text fields. Defaults to `quoted-printable`.
 
-```
+```php
   'debug' => true,
 ```
 
