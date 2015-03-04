@@ -8,7 +8,7 @@ This is a fork of [the ODBC Driver for Drupal 7](https://www.drupal.org/sandbox/
 
 Good question. The preferred way of running Drupal on SQL Server is to use [the sqlsrv driver](https://www.drupal.org/project/sqlsrv) and run the web servers on Windows.
 
-But if for some reason you need to run the web server on Linux, but talk to a SQL Server instance running on Windows, this driver can help.
+But if for some reason you need to run the web server on Linux, Mac or something else but talk to a SQL Server database running on Windows, this driver can help.
 
 Beware that this way of connecting has problems with binary data (`varchar(max)` and `varbinary(max)`).
 See below for details on converting fields to a format that works.
