@@ -26,7 +26,8 @@ To use this driver, you'll first need to install these components:
 
  * [Microsoft® SQL Server® ODBC Driver 1.0 for Linux](http://www.microsoft.com/en-gb/download/details.aspx?id=28160)
  * [odbcUNIX](http://www.unixodbc.org/)
- * Drupal, obviously
+ * PHP 5.3 or above
+ * Drupal 7, obviously
 
 FreeTDS is an alternative to the Microsoft driver. See notes near the bottom.
 
