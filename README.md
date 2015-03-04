@@ -10,7 +10,7 @@ Good question. The preferred way of running Drupal on SQL Server is to use [the 
 
 But if for some reason you need to run the web server on Linux, Mac or something else but talk to a SQL Server database running on Windows, this driver can help.
 
-Beware that this way of connecting has problems with binary data (`varchar(max)` and `varbinary(max)`).
+Beware that this way of connecting has problems with binary data stored as `varchar(max)` and `varbinary(max)`.
 See below for details on converting fields to a format that works.
 
 Beware also that performance of this driver will never be top notch.
