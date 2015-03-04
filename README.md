@@ -51,6 +51,7 @@ Be aware that this driver **does not** use the connections you define in `/etc/o
 
 ### This module
 
+Database connectors behave a little differently from other modules.
 Copy the `odbc` directory from inside this module and put it into your Drupal installation's `includes/database` directory.
 
 
