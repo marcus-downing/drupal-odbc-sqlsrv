@@ -29,6 +29,8 @@ To use this driver, you'll first need to install these components:
  * PHP 5.3 or above
  * Drupal 7, obviously
 
+Note that the Microsoft driver is built with Red Hat Linux, and [may require extra work to install on other versions](https://blog.afoolishmanifesto.com/posts/install-and-configure-the-ms-odbc-driver-on-debian/).
+
 FreeTDS is an alternative to the Microsoft driver. See notes near the bottom.
 
 ### ODBC settings
