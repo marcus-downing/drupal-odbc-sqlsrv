@@ -38,7 +38,7 @@ FreeTDS is an alternative to the Microsoft driver. See notes near the bottom.
 Edit your ODBC instance settings, which are probably at `/etc/odbcinst.ini`.
 
 ```ini
-[SQL Server]
+[SQL Server Native Client 11.0]
 Description     = Microsoft SQL Server ODBC Driver V1.0 for Linux
 Driver          = /opt/microsoft/sqlncli/lib64/libsqlncli-11.0.so.1790.0
 UsageCount      = 1
@@ -68,7 +68,7 @@ You'll need to put a config like this in your settings file (probably something 
 
 $databases['default']['default'] = array(
   'driver'        => 'odbc',
-  'odbc_driver'   => 'SQL Server',
+  'odbc_driver'   => 'SQL Server Native Client 11.0',
   'host'          => '<hostname>',
   'port'          => 1433,
   'database'      => '<database name>',
@@ -78,7 +78,7 @@ $databases['default']['default'] = array(
 );
 ```
 
-Note that the value of `odbc_driver` must match up to the name you gave it in the ODBC settings.
+Note that the value of `odbc_driver` must match up to the name you gave it in the ODBC settings. The name `'SQL Server Native Client 11.0'` should be the default when the Microsoft driver is installed.
 
 
 ## Alternatively, FreeTDS
