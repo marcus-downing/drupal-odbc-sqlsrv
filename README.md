@@ -47,7 +47,7 @@ ForceTrace      = Yes
 
 Check the location of the `Driver` value for yourself, as it may be different. Note that you **must include the spaces** in the above file, otherwise it won't work.
 
-Be aware that this driver **does not** use the connections you define in `/etc/odbc.ini`, which is why the connection settings below need to use the full hostname and port, not a short name.
+Be aware also that this driver **does not** use the connections you define in `/etc/odbc.ini`, which is why the connection settings need to use the full hostname and port, not a short name.
 
 
 ### This module
