@@ -12,6 +12,11 @@
 
 include_once DRUPAL_ROOT . '/includes/database/prefetch.inc';
 
+if (!defined('WATCHDOG_ERROR'))     define('WATCHDOG_ERROR', 3);
+if (!defined('WATCHDOG_WARNING'))   define('WATCHDOG_WARNING', 4);
+if (!defined('WATCHDOG_NOTICE'))    define('WATCHDOG_NOTICE', 5);
+if (!defined('WATCHDOG_INFO'))      define('WATCHDOG_INFO', 5);
+
 /**
  * Emulate ATTR_EMULATE_PREPARES on drivers that don't support it
  */
@@ -27,6 +32,17 @@ if (!defined('ODBC_FORGIVING')) define('ODBC_FORGIVING', true);
  */
 if (!defined('ODBC_USE_TEXT')) define('ODBC_USE_TEXT', true);
 
+/**
+ * Deeper debugging. Do not leave this flag switch on!
+ *
+ * For debugging of your own code, set 'debug' => true flag on the database connection settings.
+ * 
+ * 0 = None
+ * 1 = Lots of debugging spewed all over your screen
+ * 2 = A totally unreasonable amount of debugging
+ */
+if (!defined('ODBC_WATCHDOG_DEBUG')) define('ODBC_WATCHDOG_DEBUG', 0);
+
 
 
 class DatabaseConnection_odbc extends DatabaseConnection {
@@ -34,6 +50,8 @@ class DatabaseConnection_odbc extends DatabaseConnection {
   public $bypassQueryPreprocess = FALSE;
 
   private $debug = FALSE;
+
+  private $watchdogQueue = array();
 
   /**
    * Override of DatabaseConnection::driver().
@@ -63,13 +81,33 @@ class DatabaseConnection_odbc extends DatabaseConnection {
   }
 
   /**
-   * Function to log
-   * Note that we can't assume WATCHDOG_NOTICE is defined, so we use the number 5
+   * Log messages with dblog; or queue them if we're in the middle of another query
    */
-  public function watchdog($message, $variables = array(), $severity = 5, $link = null) {
+  public function watchdog($message, $variables = array(), $severity = WATCHDOG_NOTICE, $link = '') {
     if (!$this->debug)
       return;
-    watchdog('odbc-sqlsrv', $message, $variables, $severity, $link);
+    if (ODBC_WATCHDOG_DEBUG) {
+      echo "<p><b>Watchdog:</b> $message</p>\n<pre>"; print_r($variables); echo "</pre>\n";
+      if (ODBC_WATCHDOG_DEBUG >= 2) {
+        echo "<p>Transaction depth: ".$this->transactionDepth()."</p>";
+        echo "<pre style='font-size: 0.7em; padding: 0 1em;'>"; debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS); echo "</pre>\n";
+      }
+    }
+    if ($this->inTransaction()) {
+      $this->watchdogQueue[] = array($message, $variables, $severity, $link);
+    } else {
+      watchdog('odbc-sqlsrv', $message, $variables, $severity, $link);
+    }
+  }
+
+  public function popTransaction($name) {
+    parent::popTransaction($name);
+    if (!$this->inTransaction()) {
+      foreach ($this->watchdogQueue as list($message, $variables, $severity, $link)) {
+        watchdog('odbc-sqlsrv', $message, $variables, $severity, $link);
+      }
+      $this->watchdogQueue = array();
+    }
   }
 
   /**
@@ -79,8 +117,6 @@ class DatabaseConnection_odbc extends DatabaseConnection {
    */
   public function __construct(array $connection_options = array()) {
     $this->debug = isset($connection_options['debug']) && $connection_options['debug'] && is_callable('watchdog');
-
-    $this->watchdog('ODBC driver for SQL Server: Debug on');
 
     // Store connection options for future reference.
     $this->connectionOptions = $connection_options;
@@ -132,6 +168,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
    * @status tested
    */
   public function prepare($query, $options = array()) {
+    $query = $this->preprocessQuery($query);
     return new DatabaseStatement_odbc($this, $query, $options);
   }
 
@@ -213,7 +250,19 @@ class DatabaseConnection_odbc extends DatabaseConnection {
 
   public function quote($str, $paramType = PDO::PARAM_STR) {
     if (is_null($str)) return '';
-    return "'".str_replace("'", "''", $str)."'";
+    if (is_array($str)) {
+      $this->watchdog('Attempt to use array as parameter: %arr', array('%arr' => $str));
+      return "''";
+    }
+    // $quoted = parent::quote($str, $paramType);
+
+    $quoted = $str;
+    // $quoted = str_replace(':', '\:', $quoted);
+    // $quoted = str_replace('?', '\?', $quoted);
+    $quoted = str_replace("'", "''", $quoted);
+    $quoted = "'".$quoted."'";
+
+    return $quoted;
   }
 
   public function quoteIdentifier($identifier) {
@@ -231,6 +280,25 @@ class DatabaseConnection_odbc extends DatabaseConnection {
 
   public function quoteIdentifiers($identifiers) {
     return array_map(array($this, 'quoteIdentifier'), $identifiers);;
+  }
+
+  /**
+   * Override of DatabaseConnection::query().
+   */
+  public function query($query, array $args = array(), $options = array()) {
+    try {
+      if (is_string($query)) {
+        if (ODBC_WATCHDOG_DEBUG) { echo "<p>Query: prepreparing \"<tt>$query</tt>\" with arguments:</p>\n<pre>"; print_r($args); echo "</pre>\n"; }
+        $sql = $this->replacePlaceholders($query, $args);
+        if (ODBC_WATCHDOG_DEBUG) { echo "<p>Query: preprepared \"<tt>$sql</tt>\"</p>\n"; }
+        return parent::query($sql, array(), $options);
+      } else {
+        return parent::query($query, $args, $options);
+      }
+    } catch (Exception $e) {
+      $this->watchdog(get_class($e).' when executing "%sql" with variables %vars: %error', array('%sql' => (string) $query, '%vars' => $args, '%error' => $e->getMessage()), WATCHDOG_ERROR);
+      throw $e;
+    }
   }
 
   /**
@@ -263,7 +331,85 @@ class DatabaseConnection_odbc extends DatabaseConnection {
 
   /**
    * Internal function: do a manual placeholder replacement for a query.
+   * New version to build into a buffer rather than using str_replace, to avoid falling foul of
    */
+  public function replacePlaceholders($query, array $args = array()) {
+    if (empty($args))
+      return $query;
+
+    // make sure the values are all formatted for SQL
+    $args = array_map(array($this, 'inlineValue'), $args);
+
+    //  locate the arguments in the input string
+    $placeholders = array();
+    if (range(0, count($args) - 1) === array_keys($args)) {
+      //  using ordered arguments,  ?
+      //  we can be sure the arguments are in order
+      $offset = 0;
+      $currentArg = 0;
+      while ($pos = strpos($query, '?', $offset) && $currentArg < count($args)) {
+        $placeholders[] = array($pos, '?', $args[$currentArg]);
+        $currentArg++;
+        $offset = $pos + 1;
+      }
+    } else {
+      //  using named arguments,  :name
+      //  these aren't necessarily in order in SQL, so get positions for all the ones we can find
+      foreach ($args as $key => $value) {
+        if ($key[0] != ':') {
+          $key = ":$key";
+        }
+        $offset = 0;
+        while ($pos = strpos($query, $key, $offset)) {
+          $placeholders[$pos] = array($pos, $key, $value);
+          $offset = $pos + 1;
+        }
+      }
+      // sort the indices by their position
+      ksort($placeholders);
+      $placeholders = array_values($placeholders);
+    }
+    // if (ODBC_WATCHDOG_DEBUG) {
+    //   echo "<p>Replacing placeholders in \"<tt>$query</tt>\":</p>\n<pre>";
+    //   print_r($placeholders);
+    //   echo "</pre>\n";
+    // }
+
+
+    // build the output buffer
+    $buf = "";
+    $offset = 0;
+    foreach ($placeholders as list($index, $key, $value)) {
+      if (ODBC_WATCHDOG_DEBUG && substr($query, $index, strlen($key)) != $key) echo "<p><b>Error! Mismatching placeholder at offset $index: \"".substr($query, $index, strlen($key))."\" != \"$key\"</p>\n";
+      $buf .= substr($query, $offset, $index - $offset);
+      $buf .= $value;
+      $offset = $index + strlen($key);
+    }
+    $buf .= substr($query, $offset);
+
+    // if (ODBC_WATCHDOG_DEBUG) echo "<p>Result: \"<tt>$buf</tt>\":</p>\n";
+    
+    return $buf;
+  }
+
+  function inlineValue($value) {
+    // if (is_array($value) && count($value) == 1 && isset($value[0]))
+    //   $value = $value[0];
+    if (is_array($value)) {
+      $values = array_map(array($this, 'inlineValue'), $value);
+      return implode(', ', $values);
+    }
+
+    if (is_null($value))
+      return 'null';
+    if (is_float($value))
+      return sprintf('%F', $value);
+    if (is_int($value))
+      return sprintf('%d', $value);
+    return $this->quote($value);
+  }
+
+  /*
   public function replacePlaceholders($query, array $args = array()) {
     // Check if $args is a simple numeric array.
     if (range(0, count($args) - 1) === array_keys($args)) {
@@ -309,7 +455,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     }
     
     return $query;
-  }
+  }*/
 
   /**
    * Internal function: massage a query to make it compliant with SQL Server.
@@ -421,7 +567,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
 
   public function lastInsertId($name = null) {
     $last = $this->query('SELECT @@IDENTITY')->fetchField();
-    $this->watchdog('Last insert ID: %id', array('%id' => $last));
+    // $this->watchdog('Last insert ID: %id', array('%id' => $last));
     return $last;
   }
 
@@ -466,21 +612,25 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
 
       $statement = $this->getStatement($queryString);
       if (!$statement) {
+        $this->dbh->watchdog('No statement for query "%sql"', array('%sql' => $this->queryString), WATCHDOG_ERROR);
         $this->throwPDOException();
       }
       $return = $statement->execute();
       if (!$return) {
+        $this->dbh->watchdog('Failed to execute query "%sql"', array('%sql' => $this->queryString), WATCHDOG_ERROR);
         $this->throwPDOException();
       }
 
     } else {
       $statement = $this->getStatement($this->queryString, $args);
       if (!$statement) {
+        $this->dbh->watchdog('No statement for query "%sql"', array('%sql' => $this->queryString), WATCHDOG_ERROR);
         $this->throwPDOException();
       }
 
       $return = $statement->execute($args);
       if (!$return) {
+        $this->dbh->watchdog('Failed to execute query "%sql"', array('%sql' => $this->queryString), WATCHDOG_ERROR);
         $this->throwPDOException();
       }
     }
@@ -505,6 +655,7 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
       $this->data = $statement->fetchAll(PDO::FETCH_ASSOC);
     }
     catch (Exception $e) {
+      $this->dbh->watchdog(get_class($e).' when executing "%sql": %error', array('%sql' => $this->queryString, '%error' => $e->getMessage()), WATCHDOG_ERROR);
       $this->data = array();
     }
 
@@ -563,4 +714,14 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
  *
  * @see http://drupal.org/node/851136
  */
-class DatabaseTransaction_odbc extends DatabaseTransaction { }
+class DatabaseTransaction_odbc extends DatabaseTransaction {
+  // public function __construct(DatabaseConnection $connection, $name = NULL) {
+  //   parent::__construct($connection, $name);
+  //   if (ODBC_WATCHDOG_DEBUG) echo "<p>Starting transaction: ".$connection->transactionDepth()."</p>";
+  // }
+
+  // public function __destruct() {
+  //   parent::__destruct();
+  //   if (ODBC_WATCHDOG_DEBUG) echo "<p>Ending transaction: ".$this->connection->transactionDepth()."</p>";
+  // }
+}

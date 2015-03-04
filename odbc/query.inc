@@ -31,6 +31,8 @@ class InsertQuery_odbc extends InsertQuery {
     }
 
     if (!empty($this->fromQuery)) {
+      if (ODBC_WATCHDOG_DEBUG) echo "<p>Insert from query</p>\n";
+
       // Re-initialize the values array so that we can re-use this query.
       $this->insertValues = array();
 
@@ -40,8 +42,10 @@ class InsertQuery_odbc extends InsertQuery {
 
         $queryString = $this->connection->replacePlaceholders($queryString, $values);
 
+        if (ODBC_WATCHDOG_DEBUG) echo "<p>Insert: preprepared $queryString</p>\n";
         $stmt = $this->connection->PDOPrepare($queryString);
       } else {
+        if (ODBC_WATCHDOG_DEBUG) echo "<p>Insert: prepare ".((string) $this)."</p>\n";
         $stmt = $this->connection->PDOPrepare($this->connection->prefixTables((string) $this));
         // Handle the case of SELECT-based INSERT queries first.
         $values = $this->fromQuery->getArguments();
@@ -51,9 +55,11 @@ class InsertQuery_odbc extends InsertQuery {
       }
 
       try {
+        if (ODBC_WATCHDOG_DEBUG) echo "<p>Insert: execute</p>\n";
         $stmt->execute();
       }
       catch (Exception $e) {
+        $this->connection->watchdog(get_class($e).' when executing "%sql" with variables %vars: %error', array('%sql' => (string) $this, '%vars' => $values, '%error' => $e->getMessage()), WATCHDOG_ERROR);
         // This INSERT query failed, rollback everything if we started a transaction earlier.
         if (!empty($transaction)) {
           $transaction->rollback();
@@ -71,11 +77,14 @@ class InsertQuery_odbc extends InsertQuery {
       // Re-initialize the values array so that we can re-use this query.
       $this->insertValues = array();
 
+      if (ODBC_WATCHDOG_DEBUG) echo "<p>Insert: default values</p>\n";
       $stmt = $this->connection->PDOPrepare($this->connection->prefixTables('INSERT INTO {' . $this->table . '} DEFAULT VALUES'));
       try {
         $stmt->execute();
       }
       catch (Exception $e) {
+        $this->connection->watchdog(get_class($e).' when executing "%sql" with variables %vars: %error', array('%sql' => (string) $this, '%vars' => $values, '%error' => $e->getMessage()), WATCHDOG_ERROR);
+
         // This INSERT query failed, rollback everything if we started a transaction earlier.
         if (!empty($transaction)) {
           $transaction->rollback();
@@ -89,25 +98,32 @@ class InsertQuery_odbc extends InsertQuery {
 
     if (ODBC_EMULATE_PREPARES) {
       $queryString = $this->connection->prefixTables((string) $this);
+      if (ODBC_WATCHDOG_DEBUG) echo "<p>Insert: prepreparing $queryString</p>\n";
 
       foreach ($this->insertValues as $insert_index => $insert_values) {
         $values = array();
         foreach ($this->insertFields as $field_index => $field) {
-          
+          // if (ODBC_WATCHDOG_DEBUG >= 2) { echo "<p>"; print_r($insert_values) }
           $key = ':db_insert' . $field_index;
-          if (isset($insert_values[$field_index]))
+          if (isset($insert_values[$field_index])) {
             $values[$key] = $insert_values[$field_index];
-          else $this->connection->watchdog('Missing value for %field when running %query', array('%field' => $field, '%query' => $queryString));
+          } else {
+            $values[$key] = null;
+            $this->connection->watchdog('Missing value for %field when running "%query"', array('%field' => $field, '%query' => (string) $this));
+          }
         }
 
+        if (ODBC_WATCHDOG_DEBUG) { echo "<pre>with values: "; print_r($values); echo "</pre>\n"; }
         $insertString = $this->connection->replacePlaceholders($queryString, $values);
-
+        if (ODBC_WATCHDOG_DEBUG) echo "<p>Insert: preprepared $insertString</p>\n";
         $stmt = $this->connection->PDOPrepare($insertString);
 
         try {
           $stmt->execute();
         }
         catch (Exception $e) {
+          $this->connection->watchdog(get_class($e).' when executing "%sql" with variables %vars: %error', array('%sql' => (string) $this, '%vars' => $values, '%error' => $e->getMessage()), WATCHDOG_ERROR);
+
           // This INSERT query failed, rollback everything if we started a transaction earlier.
           if (!empty($transaction)) {
             $transaction->rollback();
@@ -126,6 +142,7 @@ class InsertQuery_odbc extends InsertQuery {
 
     $query = (string) $this;
     $stmt = $this->connection->PDOPrepare($this->connection->prefixTables($query));
+    if (ODBC_WATCHDOG_DEBUG) echo "<p>Insert: prepared $query</p>\n";
 
     // We use this array to store references to the blob handles.
     // This is necessary because the PDO will otherwise messes up with references.
@@ -134,7 +151,9 @@ class InsertQuery_odbc extends InsertQuery {
     foreach ($this->insertValues as $insert_index => $insert_values) {
       $max_placeholder = 0;
       foreach ($this->insertFields as $field_index => $field) {
-        $placeholder = ':db_insert' . $max_placeholder++;
+        $placeholder = ':db_insert' . $max_placeholder;
+        if (ODBC_WATCHDOG_DEBUG) echo "<p>Assigning placeholder $placeholder to field $field_index<p>";
+        $max_placeholder++;
         if (isset($columnInformation['blobs'][$field])) {
           $data_values[$placeholder . $insert_index] = fopen('php://memory', 'a');
           fwrite($data_values[$placeholder . $insert_index], $insert_values[$field_index]);
@@ -144,15 +163,19 @@ class InsertQuery_odbc extends InsertQuery {
           //$stmt->bindParam($placeholder, $data_values[$placeholder . $insert_index], PDO::PARAM_LOB, 0, PDO::SQLSRV_ENCODING_BINARY);
         }
         else {
+          if (ODBC_WATCHDOG_DEBUG) echo "<p>Value $placeholder number $insert_index<p>";
           $data_values[$placeholder . $insert_index] = $insert_values[$field_index];
           $stmt->bindParam($placeholder, $data_values[$placeholder . $insert_index]);
         }
       }
 
       try {
+        if (ODBC_WATCHDOG_DEBUG) echo "<p>Insert: executing</p>\n";
         $stmt->execute();
       }
       catch (Exception $e) {
+        $this->connection->watchdog(get_class($e).' when executing "%sql" with variables %vars: %error', array('%sql' => (string) $this, '%vars' => $values, '%error' => $e->getMessage()), WATCHDOG_ERROR);
+
         // This INSERT query failed, rollback everything if we started a transaction earlier.
         if (!empty($transaction)) {
           $transaction->rollback();
@@ -308,9 +331,20 @@ class UpdateQuery_odbc extends UpdateQuery {
         $updateString = $this->connection->replacePlaceholders($updateString, $arguments);
       }
 
-      $stmt = $this->connection->PDOPrepare($updateString);
-      $stmt->execute();
-      return $stmt->rowCount();
+      try {
+        $stmt = $this->connection->PDOPrepare($updateString);
+        $stmt->execute();
+        return $stmt->rowCount();
+      } catch (Exception $x) {
+        $this->connection->watchdog(get_class($e).' when executing "%sql" with variables %vars: %error', array('%sql' => (string) $this, '%vars' => $values, '%error' => $e->getMessage()), WATCHDOG_ERROR);
+
+        // This UPDATE query failed, rollback everything if we started a transaction earlier.
+        // if (!empty($transaction)) {
+        //   $transaction->rollback();
+        // }
+        // Rethrow the exception.
+        throw $e;
+      }
     }
 
     // Because we filter $fields the same way here and in __toString(), the
