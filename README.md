@@ -111,7 +111,7 @@ How to encode Unicode content in text fields. This is necessary when using the `
 Value              | Encoding                          | Example
 ------------------ | --------------------------------- | ----------
 ''                 | None, use UTF-8 directly          | £
-'html'             | HTML character entities           | &#163;
+'html'             | HTML character entities           | &amp;#163;
 'u'                | Unicode escape code               | \u00A3
 'quoted-printable' | Quoted-printable email encoding   | =C2=A3
 
