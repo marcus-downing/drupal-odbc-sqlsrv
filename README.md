@@ -83,28 +83,44 @@ Note that the value of `odbc_driver` must match up to the name you gave it in th
 Other settings include:
 
 ```php
+  'tds_version'   => '8.0'
+```
+
+If using the FreeTDS driver (see below), use this to set the version.
+
+```php
   'use_text' => true,
 ```
 
-Whether to use the `text` type for large binary fields rather than `varchar(max)` and `varbinary(max)`. Defaults to `true`.
+Whether to use the `text` field type for large binary fields rather than `varchar(max)` and `varbinary(max)`. Defaults to `true`.
+
+Note that you need to convert your database to use the same type of field as this setting, so changing it on an existing database is likely to break it.
 
 ```php
   'transactions' => false,
 ```
 
-Whether to use transactions. Defaults to `false`.
+Whether to use transactions. Defaults to `false`, because this seems to work best with SQL Server 2008 R2.
 
 ```php
-  'encoding' => 'quoted-printable',
+  'encoding' => 'html',
 ```
 
-How to encode Unicode content in text fields. Defaults to `quoted-printable`.
+How to encode Unicode content in text fields. This is necessary when using the `text` option, as it can mangle unicode.
+
+Value              | Encoding                          | Example
+----------------------------------------------------------------
+''                 | None, use UTF-8 directly          | £
+'html'             | HTML character entities           | &#163;
+'u'                | Unicode escape code               | \u00A3
+'quoted-printable' | Quoted-printable email encoding   | =C2=A3
+
 
 ```php
   'debug' => true,
 ```
 
-Whether to use Dblog (formerly Watchdog) to record information about queries and errors. Defaults to `false`.
+Whether to use Drupal dblog (formerly Watchdog) to record information about queries and errors. Defaults to `false`.
 
 ## Alternatively, FreeTDS
 
