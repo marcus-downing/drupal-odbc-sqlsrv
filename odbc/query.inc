@@ -59,7 +59,7 @@ class InsertQuery_odbc extends InsertQuery {
         $stmt->execute();
       }
       catch (Exception $e) {
-        $this->connection->watchdog(get_class($e).' when executing "%sql" with variables %vars: %error', array('%sql' => (string) $this, '%vars' => $values, '%error' => $e->getMessage()), WATCHDOG_ERROR);
+        $this->connection->watchdog(get_class($e).' when executing "%sql" with variables %vars: '.$e->getMessage(), array('%sql' => (string) $this, '%vars' => $values), WATCHDOG_ERROR);
         // This INSERT query failed, rollback everything if we started a transaction earlier.
         if (!empty($transaction)) {
           $transaction->rollback();
@@ -83,7 +83,7 @@ class InsertQuery_odbc extends InsertQuery {
         $stmt->execute();
       }
       catch (Exception $e) {
-        $this->connection->watchdog(get_class($e).' when executing "%sql" with variables %vars: %error', array('%sql' => (string) $this, '%vars' => $values, '%error' => $e->getMessage()), WATCHDOG_ERROR);
+        $this->connection->watchdog(get_class($e).' when executing "%sql" with variables %vars: '.$e->getMessage(), array('%sql' => (string) $this, '%vars' => $values), WATCHDOG_ERROR);
 
         // This INSERT query failed, rollback everything if we started a transaction earlier.
         if (!empty($transaction)) {
@@ -122,7 +122,7 @@ class InsertQuery_odbc extends InsertQuery {
           $stmt->execute();
         }
         catch (Exception $e) {
-          $this->connection->watchdog(get_class($e).' when executing "%sql" with variables %vars: %error', array('%sql' => (string) $this, '%vars' => $values, '%error' => $e->getMessage()), WATCHDOG_ERROR);
+          $this->connection->watchdog(get_class($e).' when executing "%sql" with variables %vars: '.$e->getMessage(), array('%sql' => (string) $this, '%vars' => $values), WATCHDOG_ERROR);
 
           // This INSERT query failed, rollback everything if we started a transaction earlier.
           if (!empty($transaction)) {
@@ -174,7 +174,7 @@ class InsertQuery_odbc extends InsertQuery {
         $stmt->execute();
       }
       catch (Exception $e) {
-        $this->connection->watchdog(get_class($e).' when executing "%sql" with variables %vars: %error', array('%sql' => (string) $this, '%vars' => $values, '%error' => $e->getMessage()), WATCHDOG_ERROR);
+        $this->connection->watchdog(get_class($e).' when executing "%sql" with variables %vars: '.$e->getMessage(), array('%sql' => (string) $this, '%vars' => $values), WATCHDOG_ERROR);
 
         // This INSERT query failed, rollback everything if we started a transaction earlier.
         if (!empty($transaction)) {
@@ -295,17 +295,17 @@ class UpdateQuery_odbc extends UpdateQuery {
       // and remove any literal fields that conflict.
       $fields = $this->fields;
      
-      foreach ($this->expressionFields as $field => $data) {
-        if (!empty($data['arguments'])) {
-          foreach ($data['arguments'] as $placeholder => $argument) {
-            // We assume that an expression will never happen on a BLOB field,
-            // which is a fairly safe assumption to make since in most cases
-            // it would be an invalid query anyway.
-            $stmt->bindParam($placeholder, $data['arguments'][$placeholder]);
-          }
-        }
-        unset($fields[$field]);
-      }
+      // foreach ($this->expressionFields as $field => $data) {
+      //   if (!empty($data['arguments'])) {
+      //     foreach ($data['arguments'] as $placeholder => $argument) {
+      //       // We assume that an expression will never happen on a BLOB field,
+      //       // which is a fairly safe assumption to make since in most cases
+      //       // it would be an invalid query anyway.
+      //       $stmt->bindParam($placeholder, $data['arguments'][$placeholder]);
+      //     }
+      //   }
+      //   unset($fields[$field]);
+      // }
 
       $values = array();
       foreach ($fields as $field => $value) {
@@ -335,7 +335,7 @@ class UpdateQuery_odbc extends UpdateQuery {
         $stmt = $this->connection->PDOPrepare($updateString);
         $stmt->execute();
         return $stmt->rowCount();
-      } catch (Exception $x) {
+      } catch (Exception $e) {
         $this->connection->watchdog(get_class($e).' when executing "%sql" with variables %vars: %error', array('%sql' => (string) $this, '%vars' => $values, '%error' => $e->getMessage()), WATCHDOG_ERROR);
 
         // This UPDATE query failed, rollback everything if we started a transaction earlier.

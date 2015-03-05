@@ -236,8 +236,8 @@ class DatabaseSchema_odbc extends DatabaseSchema {
     // it much easier for modules (such as schema.module) to map
     // database types back into schema types.
 
-    // If working around Microsoft ODBC driver's varbinary bug, use text field instead.
-    if (ODBC_USE_TEXT)
+    // If working around Microsoft ODBC driver's varbinary bug, use text fields instead.
+    if ($this->connection->useTextFields)
       return array(
         'varchar:normal' => 'nvarchar',
         'char:normal' => 'nchar',
@@ -757,7 +757,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
 
     $this->createTechnicalPrimaryColumn($table);
 
-    $intermediateFormat = ODBC_USE_TEXT ? 'varbinary(8000)' : 'varbinary(max)';
+    $intermediateFormat = $this->connection->useTextFields ? 'varbinary(8000)' : 'varbinary(max)';
 
     // Then, build a expression based on the columns.
     $column_expression = array();

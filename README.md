@@ -113,8 +113,10 @@ Value                | Encoding                          | Example
 `''`                 | None, use UTF-8 directly          | £
 `'html'`             | HTML character entities           | &amp;#163;  or  &amp;pound;
 `'u'`                | Unicode escape code               | \u00A3
+`'url'`              | URL-encoded characters            | %C2%A3
 `'quoted-printable'` | Quoted-printable email encoding   | =C2=A3
 
+Note that Unicode encoding is only available from PHP 6 upwards.
 
 ```php
   'debug' => false,

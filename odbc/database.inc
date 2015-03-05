@@ -11,11 +11,18 @@
  */
 
 include_once DRUPAL_ROOT . '/includes/database/prefetch.inc';
+include_once __DIR__ . '/unicode.inc';
 
+// can't always take constants for granted across PHP versions, so define these if they're not already
 if (!defined('WATCHDOG_ERROR'))     define('WATCHDOG_ERROR', 3);
 if (!defined('WATCHDOG_WARNING'))   define('WATCHDOG_WARNING', 4);
 if (!defined('WATCHDOG_NOTICE'))    define('WATCHDOG_NOTICE', 5);
 if (!defined('WATCHDOG_INFO'))      define('WATCHDOG_INFO', 5);
+
+if (!defined('ENT_HTML401'))        define('ENT_HTML401', 0);
+if (!defined('ENT_HTML5'))          define('ENT_HTML5', 16 | 32);
+if (!defined('ENT_NOQUOTES'))       define('ENT_NOQUOTES', 0);
+if (!defined('ENT_IGNORE'))         define('ENT_IGNORE', 4);
 
 /**
  * Emulate ATTR_EMULATE_PREPARES on drivers that don't support it
@@ -28,9 +35,31 @@ if (!defined('ODBC_EMULATE_PREPARES')) define('ODBC_EMULATE_PREPARES', true);
 if (!defined('ODBC_FORGIVING')) define('ODBC_FORGIVING', true);
 
 /**
+ * Whether to use transactions with the SQL connection.
+ *
+ * This can be overridden in the connection settings with 'transations' => (boolean)
+ */
+if (!defined('ODBC_USE_TRANSACTIONS')) define('ODBC_USE_TRANSACTIONS', false);
+
+/**
  * Use the deprecated but more compatible `text` data type in place of `varchar` and `varbinary`
+ *
+ * This can be overridden in the connection setttings with 'use_text' => (boolean)
  */
 if (!defined('ODBC_USE_TEXT')) define('ODBC_USE_TEXT', true);
+
+/**
+ * Use this encoding to store Unicode text on a non-Unicode database.
+ *
+ *  ''                  = No encoding, use UTF-8 directly          £
+ *  'html'              = HTML character entities                  &#163;
+ *  'u'                 = Unicode escaped characters               \u00A3
+ *  'url'               = URL-encoded characters                   %C2%A3
+ *  'quoted-printable'  = Use email "quoted-printable" encoding    =C2=A3
+ *
+ * This can be overridden in the connection settings with 'encoding' => (string)
+ */
+if (!defined('ODBC_ENCODING')) define('ODBC_ENCODING', 'u');
 
 /**
  * Deeper debugging. Do not leave this flag switch on!
@@ -116,7 +145,8 @@ class DatabaseConnection_odbc extends DatabaseConnection {
    * @status complete
    */
   public function __construct(array $connection_options = array()) {
-    $this->debug = isset($connection_options['debug']) && $connection_options['debug'] && is_callable('watchdog');
+    // Whether to use dblog / watchdog to record debug information
+    $this->debug = isset($connection_options['debug']) && (boolean) $connection_options['debug'] && is_callable('watchdog');
 
     // Store connection options for future reference.
     $this->connectionOptions = $connection_options;
@@ -125,8 +155,16 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     // DatabaseStatement_odbc below.
     $this->statementClass = NULL;
 
-    // This driver defaults to transaction support, except if explicitly passed FALSE.
-    $this->transactionSupport = !isset($connection_options['transactions']) || $connection_options['transactions'] !== FALSE;
+    // Whether to use transactions
+    $this->transactionSupport = isset($connection_options['transactions']) ? (boolean) $connection_options['transactions'] : ODBC_USE_TRANSACTIONS;
+
+    // Whether to use `text` fields instead of varchar(max) and varbinary(max)
+    $this->useTextFields = isset($connection_options['use_text']) ? (boolean) $connection_options['use_text'] : ODBC_USE_TEXT;
+
+    // The encoding to use for higher characters
+    $this->encoding = isset($connection_options['encoding']) ? $connection_options['encoding'] : ODBC_ENCODING;
+    // if ($this->encoding == 'u' && !ODBC_CAN_ENCODE_UNICODE)
+    //   $this->encoding = 'html';
 
     // Build the DSN.
     $options = array(
@@ -254,15 +292,107 @@ class DatabaseConnection_odbc extends DatabaseConnection {
       $this->watchdog('Attempt to use array as parameter: %arr', array('%arr' => $str));
       return "''";
     }
+
     // $quoted = parent::quote($str, $paramType);
 
     $quoted = $str;
+    $quoted = $this->encode($quoted);
     // $quoted = str_replace(':', '\:', $quoted);
     // $quoted = str_replace('?', '\?', $quoted);
     $quoted = str_replace("'", "''", $quoted);
     $quoted = "'".$quoted."'";
 
     return $quoted;
+  }
+
+  public function encode($str) {
+    if (!is_string($str))
+      return $str;
+
+    switch ($this->encoding) {
+      case 'html':
+        $encoded = htmlentities($str, ENT_NOQUOTES | ENT_IGNORE | ENT_HTML401, 'UTF-8', false);
+        return $encoded;
+
+      case 'u':
+        $encoded = unicode_x_encode($str);
+        return $encoded;
+
+      case 'url':
+        $encoded = urlencode($str);
+        return $encoded;
+
+      case 'quoted-printable':
+        $encoded = quoted_printable_encode($str);
+        //  correct newlines back, we have no real need to split them
+        $encoded = str_replace("=\r\n", "", $encoded);
+        return $encoded;
+
+      default:
+        return $str;
+    }
+  }
+
+  public function decode($str) {
+    if (!is_string($str))
+      return $str;
+
+    try {
+      // look for quoted-printable
+      // if (preg_match('/=[0-9A-F]{2}/', $str)) {
+      //   $decoded = quoted_printable_decode($str);
+      //   if (!is_string($decoded))
+      //     return $str;
+      //   if (empty($decoded) && !empty($str))
+      //     return $str;
+
+      //   // special case to make sure we're not breaking serialised data
+      //   if (preg_match('/(a:[0-9]+:{|s:[0-9]+:")/', $str)) {
+      //     $unserialized = unserialize($decoded);
+      //     if ($unserialized == FALSE) {
+      //       $unserialized = unserialize($str);
+      //       if ($unserialized !== FALSE)
+      //         return $str;
+      //     }
+      //   }
+
+      //   return $decoded;
+      // }
+
+      // look for unicode escaping
+      // if (preg_match('/\\u[0-9A-F]{4}/', $str)) {
+      //   $decoded = unicode_decode($str);
+      //   return $str;
+      // }
+
+      return unicode_x_decode($str);
+
+      // look for URL encoding
+      // if (preg_match('/%[0-9A-F]{2}/', $str)) {
+      //   $decoded = urldecode($str);
+      //   return $str;
+      // }
+
+      // decode HTML entities
+      // $decoded = html_entity_decode($str, ENT_NOQUOTES | ENT_HTML401, 'UTF-8');
+
+      // // special case to make sure we're not breaking serialised data
+      // if (preg_match('/(a:[0-9]+:{|s:[0-9]+:")/', $str)) {
+      //   $unserialized = unserialize($decoded);
+      //   if ($unserialized == FALSE) {
+      //     $unserialized = unserialize($str);
+      //     if ($unserialized !== FALSE)
+      //       return $str;
+      //   }
+      // }
+      // return $decoded;
+
+      // return $str;
+
+    } catch (Exception $e) {
+      $this->watchdog('Error decoding string: "%str"', array('%str' => $str));
+      return $str;
+    }
   }
 
   public function quoteIdentifier($identifier) {
@@ -296,7 +426,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
         return parent::query($query, $args, $options);
       }
     } catch (Exception $e) {
-      $this->watchdog(get_class($e).' when executing "%sql" with variables %vars: %error', array('%sql' => (string) $query, '%vars' => $args, '%error' => $e->getMessage()), WATCHDOG_ERROR);
+      $this->watchdog(get_class($e).' when executing "%sql" with variables %vars: '.$e->getMessage(), array('%sql' => (string) $query, '%vars' => $args), WATCHDOG_ERROR);
       throw $e;
     }
   }
@@ -639,23 +769,14 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
     // as soon as possible.
     $this->rowCount = $statement->rowCount();
 
-    // Bind the binary columns properly.
-    // TODO: We can't to any of this because getColumnMeta doesn't work and there's on PDO_ODBC
-    // equivalent to PDO::SQLSRV_ENCODING_BINARY
-    // $null = array();
-    // for ($i = 0; $i < $statement->columnCount(); $i++) {
-    //   $meta = $statement->getColumnMeta($i);
-    //   if ($meta['sqlsrv:decl_type'] == 'varbinary') {
-    //     $null[$i] = NULL;
-    //     $statement->bindColumn($i + 1, $null[$i], PDO::PARAM_LOB, 0, PDO::SQLSRV_ENCODING_BINARY);
-    //   }
-    // }
-
     try {
       $this->data = $statement->fetchAll(PDO::FETCH_ASSOC);
+
+      //  decode strings if necessary
+      if ($this->dbh->encoding != '') $this->decodeData();
     }
     catch (Exception $e) {
-      $this->dbh->watchdog(get_class($e).' when executing "%sql": %error', array('%sql' => $this->queryString, '%error' => $e->getMessage()), WATCHDOG_ERROR);
+      $this->dbh->watchdog(get_class($e).' when executing "%sql": '.$e->getMessage(), array('%sql' => $this->queryString), WATCHDOG_ERROR);
       $this->data = array();
     }
 
@@ -703,6 +824,32 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
 
     return $return;
   }
+
+  public function decodeData() {
+    if (!is_array($this->data))
+      return;
+    if (count($this->data) > 0 && isset($this->data[0]) && !is_array($this->data[0]))
+      return;
+
+    $decoded_rows = array();
+    foreach ($this->data as $row) {
+      $decoded_row = array();
+      foreach ($row as $key => $value) {
+        $decoded_value = $this->dbh->decode($value);
+        $decoded_row[$key] = $decoded_value;
+      }
+      $decoded_rows[] = $decoded_row;
+    }
+
+    // if ($decoded_rows !== $this->data) {
+    //   echo "<pre>Decoding ";
+    //   print_r($this->data);
+    //   echo " -> ";
+    //   print_r($decoded_rows);
+    //   echo "</pre>\n";
+    // }
+    $this->data = $decoded_rows;
+  }
 }
 
 /**
@@ -725,3 +872,4 @@ class DatabaseTransaction_odbc extends DatabaseTransaction {
   //   if (ODBC_WATCHDOG_DEBUG) echo "<p>Ending transaction: ".$this->connection->transactionDepth()."</p>";
   // }
 }
+

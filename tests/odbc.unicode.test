@@ -1,0 +1,12 @@
+<?php
+
+include '../odbc/unicode.inc';
+
+$input = "£2.50 + 3€50 \ 1280¥";
+echo "Input: $input\n\n";
+
+$encoded = unicode_encode($input);
+echo "Encoded: $encoded\n\n";
+
+$decoded = unicode_decode($encoded);
+echo "Decoded: $decoded\n\n";
