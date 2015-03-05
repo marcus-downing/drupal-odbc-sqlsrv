@@ -100,24 +100,24 @@ Note that you need to convert your database to use the same type of field as thi
   'transactions' => false,
 ```
 
-Whether to use transactions. Defaults to `false`, because this seems to work best with SQL Server 2008 R2.
+Whether to use transactions. Defaults to `false`, because this seems to work best for me with SQL Server 2008 R2.
 
 ```php
   'encoding' => 'html',
 ```
 
-How to encode Unicode content in text fields. This is necessary when using the `text` option, as it can mangle unicode.
+How to encode Unicode content in text fields. This is necessary when using the `text` option, as it can mangle unicode. Defaults to 'html' as this provides the least variance from existing content.
 
 Value              | Encoding                          | Example
 ------------------ | --------------------------------- | ----------
 ''                 | None, use UTF-8 directly          | £
-'html'             | HTML character entities           | &amp;#163;
+'html'             | HTML character entities           | &amp;#163;  or  &amp;pound;
 'u'                | Unicode escape code               | \u00A3
 'quoted-printable' | Quoted-printable email encoding   | =C2=A3
 
 
 ```php
-  'debug' => true,
+  'debug' => false,
 ```
 
 Whether to use Drupal dblog (formerly Watchdog) to record information about queries and errors. Defaults to `false`.
