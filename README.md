@@ -109,7 +109,7 @@ Whether to use transactions. Defaults to `false`, because this seems to work bes
 How to encode Unicode content in text fields. This is necessary when using the `text` option, as it can mangle unicode.
 
 Value              | Encoding                          | Example
-----------------------------------------------------------------
+------------------ | --------------------------------- | ----------
 ''                 | None, use UTF-8 directly          | £
 'html'             | HTML character entities           | &#163;
 'u'                | Unicode escape code               | \u00A3
