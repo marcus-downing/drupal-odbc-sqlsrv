@@ -108,12 +108,12 @@ Whether to use transactions. Defaults to `false`, because this seems to work bes
 
 How to encode Unicode content in text fields. This is necessary when using the `text` option, as it can mangle unicode. Defaults to 'html' as this provides the least variance from existing content.
 
-Value              | Encoding                          | Example
------------------- | --------------------------------- | ----------
-''                 | None, use UTF-8 directly          | £
-'html'             | HTML character entities           | &amp;#163;  or  &amp;pound;
-'u'                | Unicode escape code               | \u00A3
-'quoted-printable' | Quoted-printable email encoding   | =C2=A3
+Value                | Encoding                          | Example
+-------------------- | --------------------------------- | ----------
+`''`                 | None, use UTF-8 directly          | £
+`'html'`             | HTML character entities           | &amp;#163;  or  &amp;pound;
+`'u'`                | Unicode escape code               | \u00A3
+`'quoted-printable'` | Quoted-printable email encoding   | =C2=A3
 
 
 ```php
