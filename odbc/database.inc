@@ -529,7 +529,8 @@ class DatabaseConnection_odbc extends DatabaseConnection {
       $values = array_map(array($this, 'inlineValue'), $value);
       return implode(', ', $values);
     }
-
+    if (is_string($value))
+      return $this->quote($value);
     if (is_null($value))
       return 'null';
     if (is_float($value))
