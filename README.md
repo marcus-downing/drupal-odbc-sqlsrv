@@ -61,7 +61,22 @@ Copy the `odbc` directory from inside this module and put it into your Drupal in
 
 ### Drupal settings
 
-You'll need to put a config like this in your settings file (probably something like `sites/default/settings.local.php`):
+You need to change the database settings in your site's settings file (probably something like `sites/default/settings.local.php`).
+Unfortunately, Drush discards any non-standard fields in the connection settings when testing connections so you need to use this manfig config:
+
+```php
+<?php
+
+$databases['default']['default'] = array(
+  'driver'        => 'odbc',
+  'host'          => ';server=<hostname>,1433;driver=SQL Server Native Client 11.0',
+  'database'      => '<database name>',
+  'username'      => '<username>',
+  'password'      => '<password>',
+);
+```
+
+If you're ''only'' using the connection from Drupal and never plan to use Drush, you can use a clearer config:
 
 ```php
 <?php
