@@ -62,7 +62,7 @@ Copy the `odbc` directory from inside this module and put it into your Drupal in
 ### Drupal settings
 
 You need to change the database settings in your site's settings file (probably something like `sites/default/settings.local.php`).
-Unfortunately, Drush discards any non-standard fields in the connection settings when testing connections so you need to use this manfig config:
+Unfortunately, Drush discards any non-standard fields in the connection settings when testing connections so you need to use this mangled config:
 
 ```php
 <?php
@@ -76,7 +76,7 @@ $databases['default']['default'] = array(
 );
 ```
 
-If you're ''only'' using the connection from Drupal and never plan to use Drush, you can use a clearer config:
+If you're ''only'' using the connection from Drupal and never plan to use Drush, you can use a more straightforward database config:
 
 ```php
 <?php
