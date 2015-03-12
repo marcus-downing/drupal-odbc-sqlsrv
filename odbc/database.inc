@@ -335,14 +335,16 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     // Build the DSN.
     $options = array(
       // TODO: Make this work with a named DSN
-      'DRIVER=' . $connection_options['odbc_driver'],
+      // 'DRIVER=' . $connection_options['odbc_driver'],
       // TODO: Check whether we pass port information in the same way as sqlsrv
       'Server=' . $connection_options['host'] . (!empty($connection_options['port']) ? ',' . $connection_options['port'] : ''),
       'Database=' . $connection_options['database'],
     );
-
-    if ($connection_options['odbc_driver'] == 'FreeTDS' && isset($connection_options['tds_version'])) {
-      $options[] = 'TDS_Version='.$connection_options['tds_version'];
+    if (isset($connection_options['odbc_driver'])) {
+      $options[] = 'driver='.$connection_options['odbc_driver'];
+      if ($connection_options['odbc_driver'] == 'FreeTDS' && isset($connection_options['tds_version'])) {
+        $options[] = 'TDS_Version='.$connection_options['tds_version'];
+      }
     }
 
     // Launch the connection to the server.
@@ -376,6 +378,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
         $driver = $conn['odbc_driver'];
         $server = $conn['host'] . (!empty($conn['port']) ? ',' . $conn['port'] : '');
         $conn['database'] = $conn['database'].';driver='.$driver.';server='.$server;
+        echo "odbc-sqlsrv: Adjusted connection settings\n";
       }
     }
   }
@@ -614,7 +617,6 @@ class DatabaseConnection_odbc extends DatabaseConnection {
       }
     } catch (Exception $e) {
       $this->log(get_class($e).' when executing "%sql" with variables %vars: '.$e->getMessage(), array('%sql' => (string) $query, '%vars' => $args), WATCHDOG_ERROR);
-      die;
       throw $e;
     }
   }
