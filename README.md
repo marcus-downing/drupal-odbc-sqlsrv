@@ -118,10 +118,10 @@ Note that you need to convert your database to use the same type of field as thi
 Whether to use transactions. Defaults to `false`, because this seems to work best for me with SQL Server 2008 R2.
 
 ```php
-  'encoding' => 'html',
+  'encoding' => 'u',
 ```
 
-How to encode Unicode content in text fields. This is necessary when using the `text` option, as it can mangle unicode. Defaults to 'html' as this provides the least variance from existing content.
+How to encode Unicode content in text fields. This is necessary when using the `text` option, as it can mangle unicode. Defaults to 'u'.
 
 Value                | Encoding                          | Example
 -------------------- | --------------------------------- | ----------
