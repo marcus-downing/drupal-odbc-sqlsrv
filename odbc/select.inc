@@ -1,6 +1,21 @@
 <?php
 
 class SelectQuery_odbc extends SelectQuery {
+  private $debug = FALSE;
+
+  private function log($message, $variables, $severity) {
+    if (is_null($variables))
+      $variables = array();
+    $variables['this'] = $this;
+    if ($this->debug)
+      $variables['threshold'] = WATCHDOG_DEBUG;
+    $this->dbh->log('SelectQuery_odbc: '.$message, $variables, $severity);
+  }
+
+  public function debug() {
+    $this->debug = TRUE;
+    $this->log('Enabling debug');
+  }
 
   /**
    * Override for SelectQuery::preExecute().
@@ -53,6 +68,7 @@ class SelectQuery_odbc extends SelectQuery {
       }
     }
 
+    // if ($this->debug) { echo "<!-- Select query: "; print_r($this->__toString()); echo " -->\n"; }
     return $this->prepared;
   }
 
@@ -63,7 +79,22 @@ class SelectQuery_odbc extends SelectQuery {
    */
   public function compile(DatabaseConnection $connection, QueryPlaceholderInterface $queryPlaceholder) {
     $this->inSubQuery = $queryPlaceholder != $this;
-    return parent::compile($connection, $queryPlaceholder);
+    $ok = parent::compile($connection, $queryPlaceholder);
+    // if ($this->debug) { echo "<!-- Select query: compiling: "; print_r($this); echo " => "; print_r($ok); echo " -->\n"; }
+    return $ok;
+  }
+
+  /**
+   * Override for SelectQuery::execute().
+   *
+   * Show debugging
+   */
+  public function execute() {
+    if ($this->debug) $this->queryOptions['DEBUG'] = true;
+    $this->log('execute: %query with args: %args', array('%query' => (string) $this, '%args' => $this->getArguments()), WATCHDOG_INFO);
+    $query = parent::execute();
+    if ($this->debug) $query->debug();
+    return $query;
   }
 
   public function __toString() {
@@ -172,6 +203,7 @@ class SelectQuery_odbc extends SelectQuery {
       }
     }
 
+    $this->log('Query string: %query', array('%query' => $query), WATCHDOG_DEBUG);
     return $query;
   }
 
