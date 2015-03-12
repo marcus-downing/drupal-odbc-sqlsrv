@@ -295,7 +295,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
       $this->loadSyslog();
       $this->log_threshold = $this->severityThreshold(isset($connection_options['log_threshold']) ? $connection_options['log_threshold'] : 'warning');
 
-      if (defined('DRUSH_BASE_PATH')) $this->logto = 'screen';
+      if (defined('DRUSH_BASE_PATH') || php_sapi_name() == 'cli') $this->logto = 'screen';
       else if (function_exists('bang_syslog')) $this->logto = 'syslog';
       else if (function_exists('watchdog')) $this->logto = 'watchdog';
     }
