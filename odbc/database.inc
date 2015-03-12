@@ -72,7 +72,7 @@ if (!defined('ODBC_ENCODING')) define('ODBC_ENCODING', 'u');
  * 1 = Lots of debugging spewed all over your screen
  * 2 = A totally unreasonable amount of debugging
  */
-if (!defined('ODBC_WATCHDOG_DEBUG')) define('ODBC_WATCHDOG_DEBUG', 0);
+if (!defined('ODBC_LOGGING_DEBUG')) define('ODBC_LOGGING_DEBUG', 0);
 
 
 
@@ -131,23 +131,18 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     if ($severity > $threshold)
       return;
 
-
-    // if (ODBC_WATCHDOG_DEBUG) {
-    //   echo "<p><b>Watchdog:</b> $message</p>\n<pre>"; print_r($variables); echo "</pre>\n";
-    //   if (ODBC_WATCHDOG_DEBUG >= 2) {
-    //     echo "<p>Transaction depth: ".$this->transactionDepth()."</p>";
-    //     echo "<pre style='font-size: 0.7em; padding: 0 1em;'>"; debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS); echo "</pre>\n";
-    //   }
-    // }
-
     $prefix = '';
     if (isset($variables['this'])) {
       $prefix = '['.substr(md5(spl_object_hash($variables['this'])), 0, 4).'] ';
       unset($variables['this']);
     }
 
+    if (ODBC_LOGGING_DEBUG) {
+      echo "<p><b>ODBC Log to $this->logto:</b> $message</p>\n<pre>"; print_r($variables); echo "</pre>\n";
+    }
+
     switch ($this->logto) {
-      case 'screen':
+      case 'echo':
         $sevc = '';
         $reset = '';
         if (function_exists('bang_syslog_colors')) {
@@ -196,7 +191,10 @@ class DatabaseConnection_odbc extends DatabaseConnection {
       case 'syslog':
         $message = $this->logReplacePlaceholders($message, $variables, $replaced_keys);
         // bang_syslog('odbc-sqlsrv: '.$prefix.$message);
-        bang_syslog('odbc-sqlsrv: '.$prefix.$message, $variables);
+        if (empty($variables))
+          bang_syslog('odbc-sqlsrv: '.$prefix.$message);
+        else
+          bang_syslog('odbc-sqlsrv: '.$prefix.$message, $variables);
         break;
 
       case 'watchdog':
@@ -220,6 +218,13 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     $new_message = $this->replacePlaceholders($message, $replacable, FALSE, $replaced_keys);
     foreach ($replaced_keys as $key)
       unset($variables[$key]);
+
+    if (count($variables) == 1) {
+      if (isset($variables['%args']))
+        $variables = $variables['%args'];
+      else if (isset($variables['%values']))
+        $variables = $variables['%values'];
+    }
 
     return $new_message;
   }
@@ -259,8 +264,10 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     if (!function_exists('drupal_system_listing'))
       return;
 
-    if (!defined('SYSLOG_COLORS'))
-      define('SYSLOG_COLORS', true);
+    if (!defined('SYSLOG_COLORS')) define('SYSLOG_COLORS', true);
+    if (!defined('SYSLOG_DISABLE')) define('SYSLOG_DISABLE', false);
+    if (!defined('SYSLOG_ESCAPE_NEWLINES')) define('SYSLOG_ESCAPE_NEWLINES', true);
+    if (!isset($_SERVER['SERVER_NAME'])) $_SERVER['SERVER_NAME'] = '';
 
     //  first load WordPress
     $matches = drupal_system_listing('/^wordpress\.module$/', 'modules', 'name', 0);
@@ -281,6 +288,9 @@ class DatabaseConnection_odbc extends DatabaseConnection {
         break;
       }
     }
+
+    if (function_exists('bang_syslog__init'))
+      bang_syslog__init();
   }
 
   /**
@@ -295,9 +305,13 @@ class DatabaseConnection_odbc extends DatabaseConnection {
       $this->loadSyslog();
       $this->log_threshold = $this->severityThreshold(isset($connection_options['log_threshold']) ? $connection_options['log_threshold'] : 'warning');
 
-      if (defined('DRUSH_BASE_PATH') || php_sapi_name() == 'cli') $this->logto = 'screen';
+      if (defined('DRUSH_BASE_PATH') || php_sapi_name() == 'cli') $this->logto = 'echo';
       else if (function_exists('bang_syslog')) $this->logto = 'syslog';
       else if (function_exists('watchdog')) $this->logto = 'watchdog';
+
+      if (ODBC_LOGGING_DEBUG) {
+        echo "<p><b>ODBC Logging to $this->logto</b>\n";
+      }
     }
 
     // Store connection options for future reference.
@@ -332,7 +346,8 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     }
 
     // Launch the connection to the server.
-    parent::__construct('odbc:' . implode(';', $options), $connection_options['username'], $connection_options['password'], array(
+    $dsn = 'odbc:'.implode(';', $options);
+    parent::__construct($dsn, $connection_options['username'], $connection_options['password'], array(
       // We ask PDO to perform the placeholders replacement itself because
       // SQL Server is not able to detect duplicated placeholders in
       // complex statements.
@@ -345,11 +360,24 @@ class DatabaseConnection_odbc extends DatabaseConnection {
       PDO::ATTR_EMULATE_PREPARES => TRUE,
     ));
 
+    $this->log('Connection string: %dsn', array('%dsn' => $dsn), WATCHDOG_DEBUG);
     $this->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
     // Fetch the name of the user-bound schema. It is the schema that SQL Server
     // will use for non-qualified tables.
     $this->schema()->defaultSchema = $this->query("SELECT SCHEMA_NAME()")->fetchField();
+
+    // If running under Drush, fiddle with the connection settings to make sure 
+    //  `drush_valid_db_credentials` builds the right query string.
+    // (but first, make sure it really is the default db)
+    if (function_exists('drush_get_context')) {
+      $conn = &$GLOBALS['databases']['default']['default'];
+      if (isset($conn) && isset($conn['driver']) && $conn['driver'] == 'odbc' && isset($conn['odbc_driver']) && !preg_match('/;driver=/', $conn['database'])) {
+        $driver = $conn['odbc_driver'];
+        $server = $conn['host'] . (!empty($conn['port']) ? ',' . $conn['port'] : '');
+        $conn['database'] = $conn['database'].';driver='.$driver.';server='.$server;
+      }
+    }
   }
 
   /**
@@ -572,7 +600,11 @@ class DatabaseConnection_odbc extends DatabaseConnection {
   public function query($query, array $args = array(), $options = array()) {
     try {
       if (is_string($query)) {
-        $this->log('ODBC: Prepreparing: %query with arguments: %args', array('%query' => $query, '%args' => $args), WATCHDOG_DEBUG);
+        if (empty($args))
+          $this->log('ODBC: Prepreparing: %query', array('%query' => $query), WATCHDOG_DEBUG);
+        else
+          $this->log('ODBC: Prepreparing: %query with args: %args', array('%query' => $query, '%args' => $args), WATCHDOG_DEBUG);
+
         $sql = $this->replacePlaceholders($query, $args);
         $this->log('ODBC: Preprepared: %sql', array('%sql' => $sql), WATCHDOG_DEBUG);
         return parent::query($sql, array(), $options);
@@ -944,11 +976,15 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
     }
 
     // Prepare the query.
+    $queryString = $this->dbh->prefixTables($this->queryString);
+
     if (ODBC_EMULATE_PREPARES) {
-      $queryString = $this->dbh->prefixTables($this->queryString);
       $queryString = $this->dbh->replacePlaceholders($queryString, $args);
 
-      $this->log('execute: Preparing query: %query with args: %args', array('%query' => $this->queryString, '%args' => $args), WATCHDOG_DEBUG);
+      if (empty($args))
+        $this->log('execute: Preparing query: %query', array('%query' => $this->queryString), WATCHDOG_DEBUG);
+      else
+        $this->log('execute: Preparing query: %query with args: %args', array('%query' => $this->queryString, '%args' => $args), WATCHDOG_DEBUG);
 
       $statement = $this->getStatement($queryString);
       
@@ -965,7 +1001,7 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
     } else {
       $this->log('execute: Unemulated? %query', array('%query' => $this->queryString), WATCHDOG_NOTICE);
 
-      $statement = $this->getStatement($this->queryString, $args);
+      $statement = $this->getStatement($queryString, $args);
       if (!$statement) {
         $this->log('execute: No statement for query "%sql"', array('%sql' => $this->queryString), WATCHDOG_ERROR);
         $this->throwPDOException();
@@ -982,17 +1018,20 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
     // as soon as possible.
     $this->rowCount = $statement->rowCount();
 
-    try {
-      $this->data = $statement->fetchAll(PDO::FETCH_ASSOC);
+    if (preg_match('/^SELECT/', $queryString)) {
+      try {
+        $this->data = $statement->fetchAll(PDO::FETCH_ASSOC);
+        $this->log('execute: Fetched %nrows rows', array('%nrows' => count($this->data)), WATCHDOG_DEBUG);
 
-      //  decode strings if necessary
-      if ($this->dbh->encoding != '') $this->decodeData();
-    }
-    catch (Exception $e) {
-      $this->log(get_class($e).' when executing "%sql": '.$e->getMessage(), array('%sql' => $this->queryString), WATCHDOG_ERROR);
-      debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
-      // tolerate this error and return nothing
-      $this->data = array();
+        //  decode strings if necessary
+        if ($this->dbh->encoding != '') $this->decodeData();
+      }
+      catch (Exception $e) {
+        $this->log(get_class($e).' when executing "%sql": '.$e->getMessage(), array('%sql' => $this->queryString), WATCHDOG_ERROR);
+        debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
+        // tolerate this error and return nothing
+        $this->data = array();
+      }
     }
 
     $this->resultRowCount = count($this->data);
@@ -1074,14 +1113,6 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
  * @see http://drupal.org/node/851136
  */
 class DatabaseTransaction_odbc extends DatabaseTransaction {
-  // public function __construct(DatabaseConnection $connection, $name = NULL) {
-  //   parent::__construct($connection, $name);
-  //   if (ODBC_WATCHDOG_DEBUG) echo "<p>Starting transaction: ".$connection->transactionDepth()."</p>";
-  // }
 
-  // public function __destruct() {
-  //   parent::__destruct();
-  //   if (ODBC_WATCHDOG_DEBUG) echo "<p>Ending transaction: ".$this->connection->transactionDepth()."</p>";
-  // }
 }
 
