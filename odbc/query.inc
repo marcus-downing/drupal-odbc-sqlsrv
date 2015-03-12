@@ -15,7 +15,7 @@ class InsertQuery_odbc extends InsertQuery {
     $variables['this'] = $this;
     if ($this->debug)
       $variables['threshold'] = WATCHDOG_DEBUG;
-    $this->dbh->log('InsertQuery_odbc: '.$message, $variables, $severity);
+    $this->connection->log('InsertQuery_odbc: '.$message, $variables, $severity);
   }
 
   public function debug() {
@@ -258,7 +258,7 @@ class UpdateQuery_odbc extends UpdateQuery {
     $variables['this'] = $this;
     if ($this->debug)
       $variables['threshold'] = WATCHDOG_DEBUG;
-    $this->dbh->log('InsertQuery_odbc: '.$message, $variables, $severity);
+    $this->connection->log('InsertQuery_odbc: '.$message, $variables, $severity);
   }
 
   public function debug() {

@@ -151,9 +151,8 @@ class DatabaseConnection_odbc extends DatabaseConnection {
         $sevc = '';
         $reset = '';
         if (function_exists('bang_syslog_colors')) {
-          define('SYSLOG_COLORS', true);
           extract(bang_syslog_colors());
-          
+
           switch ($severity) {
             case WATCHDOG_CRITICAL:
             case WATCHDOG_ERROR:
@@ -177,9 +176,9 @@ class DatabaseConnection_odbc extends DatabaseConnection {
         $message = $this->logReplacePlaceholders($message, $variables);
 
         $sev = $this->logSeverity($severity);
-        echo "$prefix$sevc($sev)$reset $message";
+        echo "$sevc$prefix($sev)$reset $message";
         if (!empty($variables)) {
-          echo "  ";
+          echo "    $magenta";
           print_r($variables);
         }
         echo "\n";
@@ -189,9 +188,9 @@ class DatabaseConnection_odbc extends DatabaseConnection {
         $message = $this->logReplacePlaceholders($message, $variables);
         $sev = $this->logSeverity($severity);
 
-        drush_log("$prefix($sev) $message", 'notice');
         if (!empty($variables))
-          print_r($variables);
+          $message .= '  '.print_r($variables, true);
+        drush_log("$prefix($sev) $message", 'notice');
         break;
 
       case 'syslog':
@@ -259,6 +258,9 @@ class DatabaseConnection_odbc extends DatabaseConnection {
 
     if (!function_exists('drupal_system_listing'))
       return;
+
+    if (!defined('SYSLOG_COLORS'))
+      define('SYSLOG_COLORS', true);
 
     //  first load WordPress
     $matches = drupal_system_listing('/^wordpress\.module$/', 'modules', 'name', 0);
@@ -666,6 +668,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     $buf = "";
     $offset = 0;
     foreach ($placeholders as list($index, $key, $value)) {
+      if (is_object($value) || is_array($value)) continue;
       if (substr($query, $index, strlen($key)) != $key) $this->log("Mismatching placeholder at offset $index: \"".substr($query, $index, strlen($key))."\" != \"$key\"", NULL, WATCHDOG_ERROR);
       $buf .= substr($query, $offset, $index - $offset);
       $buf .= $value;
@@ -889,18 +892,18 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
   }
 
   protected function getStatement($query, &$args = array()) {
-    $this->log('getStatement()', NULL, WATCHDOG_DEBUG);
+    $this->log('getStatement(%query)', array('%query' => $query), WATCHDOG_DEBUG);
     return $this->dbh->PDOPrepare($query);
   }
 
 
   public function fetch($fetch_style = NULL, $cursor_orientation = PDO::FETCH_ORI_NEXT, $cursor_offset = NULL) {
-    $this->log('fetch(%style)', array('%style' => $fetch_style), WATCHDOG_DEBUG);
+    $this->log('fetch(%style, %orientation)', array('%style' => $fetch_style, '%orientation' => $cursor_orientation), WATCHDOG_DEBUG);
     return parent::fetch($fetch_style, $cursor_orientation, $cursor_offset);
   }
 
   public function fetchAll($fetch_style = NULL, $fetch_column = NULL, $constructor_args = NULL) {
-    $this->log('fetch(%style)', array('%style' => $fetch_style), WATCHDOG_DEBUG);
+    $this->log('fetch(%style, %column)', array('%style' => $fetch_style, '%column' => $fetch_column), WATCHDOG_DEBUG);
     return parent::fetchAll($fetch_style, $fetch_column, $constructor_args);
   }
 
@@ -915,8 +918,9 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
   }
 
   public function rowCount() {
-    $this->log('rowCound()', NULL, WATCHDOG_DEBUG);
-    return parent::rowCount();
+    $nrows = parent::rowCount();
+    $this->log('rowCount() = %nrows', array('%nrows' => $nrows), WATCHDOG_DEBUG);
+    return $nrows;
   }
 
   public function execute($args = array(), $options = array()) {
@@ -986,7 +990,7 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
     }
     catch (Exception $e) {
       $this->log(get_class($e).' when executing "%sql": '.$e->getMessage(), array('%sql' => $this->queryString), WATCHDOG_ERROR);
-      die;
+      debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
       // tolerate this error and return nothing
       $this->data = array();
     }

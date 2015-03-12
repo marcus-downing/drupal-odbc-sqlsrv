@@ -9,7 +9,7 @@ class SelectQuery_odbc extends SelectQuery {
     $variables['this'] = $this;
     if ($this->debug)
       $variables['threshold'] = WATCHDOG_DEBUG;
-    $this->dbh->log('SelectQuery_odbc: '.$message, $variables, $severity);
+    $this->connection->log('SelectQuery_odbc: '.$message, $variables, $severity);
   }
 
   public function debug() {
