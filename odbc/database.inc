@@ -145,6 +145,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
       case 'echo':
         $sevc = '';
         $reset = '';
+        $magenta = '';
         if (function_exists('bang_syslog_colors')) {
           extract(bang_syslog_colors());
 
@@ -333,22 +334,23 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     //   $this->encoding = 'html';
 
     // Build the DSN.
-    $options = array(
-      // TODO: Make this work with a named DSN
-      // 'DRIVER=' . $connection_options['odbc_driver'],
-      // TODO: Check whether we pass port information in the same way as sqlsrv
-      'Server=' . $connection_options['host'] . (!empty($connection_options['port']) ? ',' . $connection_options['port'] : ''),
-      'Database=' . $connection_options['database'],
-    );
+    // TODO: Make this work with a named DSN
+    // TODO: Check whether we pass port information in the same way as sqlsrv
+    $options = array();
     if (isset($connection_options['odbc_driver'])) {
       $options[] = 'driver='.$connection_options['odbc_driver'];
       if ($connection_options['odbc_driver'] == 'FreeTDS' && isset($connection_options['tds_version'])) {
         $options[] = 'TDS_Version='.$connection_options['tds_version'];
       }
     }
+    if (isset($connection_options['host']))
+      $options[] = 'host='.$connection_options['host'].(!empty($connection_options['port']) ? ',' . $connection_options['port'] : '');
+    $options[] = 'database='.$connection_options['database'];
 
     // Launch the connection to the server.
     $dsn = 'odbc:'.implode(';', $options);
+    $this->log('Connection string: %dsn', array('%dsn' => $dsn), WATCHDOG_INFO);
+
     parent::__construct($dsn, $connection_options['username'], $connection_options['password'], array(
       // We ask PDO to perform the placeholders replacement itself because
       // SQL Server is not able to detect duplicated placeholders in
@@ -362,7 +364,6 @@ class DatabaseConnection_odbc extends DatabaseConnection {
       PDO::ATTR_EMULATE_PREPARES => TRUE,
     ));
 
-    $this->log('Connection string: %dsn', array('%dsn' => $dsn), WATCHDOG_DEBUG);
     $this->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
     // Fetch the name of the user-bound schema. It is the schema that SQL Server
@@ -575,7 +576,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
       // return $str;
 
     } catch (Exception $e) {
-      $this->log($e.getClass().' decoding string: "%str"', array('%str' => $str), WATCHDOG_ERROR);
+      $this->log(get_class($e).' decoding string: "%str"', array('%str' => $str), WATCHDOG_ERROR);
       return $str;
     }
   }
