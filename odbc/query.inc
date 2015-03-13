@@ -20,7 +20,7 @@ class InsertQuery_odbc extends InsertQuery {
 
   public function debug() {
     $this->debug = TRUE;
-    $this->log('Enabling debug');
+    $this->log('Enabling debug', NULL, WATCHDOG_DEBUG);
   }
 
   public function execute() {
@@ -130,6 +130,9 @@ class InsertQuery_odbc extends InsertQuery {
             $this->log('Missing value for \'%field\' when preparing "%query"', array('%field' => $field, '%query' => (string) $this), WATCHDOG_INFO);
           }
         }
+        
+        // Re-initialize the values array so that we can re-use this query.
+        $this->insertValues = array();
 
         $this->log('Values: %values', array('%values' => $values), WATCHDOG_DEBUG);
         $insertString = $this->connection->replacePlaceholders($queryString, $values);
