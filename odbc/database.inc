@@ -11,6 +11,7 @@
  */
 
 include_once DRUPAL_ROOT . '/includes/database/prefetch.inc';
+include_once __DIR__ . '/statement.inc';
 include_once __DIR__ . '/unicode.inc';
 
 // can't always take constants for granted across PHP versions, so define these if they're not already
@@ -26,10 +27,6 @@ if (!defined('ENT_HTML5'))          define('ENT_HTML5', 16 | 32);
 if (!defined('ENT_NOQUOTES'))       define('ENT_NOQUOTES', 0);
 if (!defined('ENT_IGNORE'))         define('ENT_IGNORE', 4);
 
-/**
- * Emulate ATTR_EMULATE_PREPARES on drivers that don't support it
- */
-if (!defined('ODBC_EMULATE_PREPARES')) define('ODBC_EMULATE_PREPARES', true);
 
 /**
  * Swallow some exceptions and log the errors instead
@@ -78,11 +75,11 @@ if (!defined('ODBC_LOGGING_DEBUG')) define('ODBC_LOGGING_DEBUG', 0);
 
 class DatabaseConnection_odbc extends DatabaseConnection {
 
-  public $bypassQueryPreprocess = FALSE;
+  public $bypassQueryPreprocess = false;
 
-  private $debug = FALSE;
+  private $debug = false;
   private $log_threshold = WATCHDOG_WARNING;
-  private $logto = FALSE;
+  private $logto = false;
 
   // private $cursorDepth = 0;
   // private $watchdogQueue = array();
@@ -199,6 +196,12 @@ class DatabaseConnection_odbc extends DatabaseConnection {
         break;
 
       case 'watchdog':
+        if (is_array($variables))
+          $variables = array_map(function ($var) {
+            if (is_array($var) || is_object($var))
+              $var = print_r($var, true);
+            return $var;
+          }, $variables);
         watchdog('odbc-sqlsrv', $prefix.$message, $variables, $severity, $link);
         break;
     }
@@ -216,7 +219,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
       // unset($variables[$key]);
     }
     $replaced_keys = array();
-    $new_message = $this->replacePlaceholders($message, $replacable, FALSE, $replaced_keys);
+    $new_message = $this->replacePlaceholders($message, $replacable, false, $replaced_keys);
     foreach ($replaced_keys as $key)
       unset($variables[$key]);
 
@@ -259,39 +262,49 @@ class DatabaseConnection_odbc extends DatabaseConnection {
    * Internal method to artificially load the syslog module before the database is initialised
    */
   private function loadSyslog() {
-    if (function_exists('bang_syslog'))
-      return;
+    if (!function_exists('bang_syslog')) {
+      if (ODBC_LOGGING_DEBUG) echo "loading syslog\n";
 
-    if (!function_exists('drupal_system_listing'))
-      return;
+      if (!function_exists('drupal_system_listing')) {
+        require_once DRUPAL_ROOT . '/includes/common.inc';
+      }
 
-    if (!defined('SYSLOG_COLORS')) define('SYSLOG_COLORS', true);
-    if (!defined('SYSLOG_DISABLE')) define('SYSLOG_DISABLE', false);
-    if (!defined('SYSLOG_ESCAPE_NEWLINES')) define('SYSLOG_ESCAPE_NEWLINES', true);
-    if (!isset($_SERVER['SERVER_NAME'])) $_SERVER['SERVER_NAME'] = '';
+      if (!defined('SYSLOG_COLORS')) define('SYSLOG_COLORS', true);
+      if (!defined('SYSLOG_DISABLE')) define('SYSLOG_DISABLE', false);
+      if (!defined('SYSLOG_ESCAPE_NEWLINES')) define('SYSLOG_ESCAPE_NEWLINES', true);
+      if (!isset($_SERVER['SERVER_NAME'])) $_SERVER['SERVER_NAME'] = '';
 
-    //  first load WordPress
-    $matches = drupal_system_listing('/^wordpress\.module$/', 'modules', 'name', 0);
-    foreach ($matches as $matched_name => $file) {
-      $path = realpath($file->uri);
-      if (file_exists($path)) {
-        include_once($path);
-        break;
+      //  first load WordPress
+      if (ODBC_LOGGING_DEBUG) echo "looking for WordPress module\n";
+      $matches = drupal_system_listing('/^wordpress\.module$/', 'modules', 'name', 0);
+      foreach ($matches as $file) {
+        $path = realpath($file->uri);
+        if (ODBC_LOGGING_DEBUG) echo "$path\n";
+        if (file_exists($path)) {
+          include_once($path);
+          break;
+        }
+      }
+
+      //  then Syslog
+      if (ODBC_LOGGING_DEBUG) echo "looking for Syslog module\n";
+      $matches = drupal_system_listing('/^bang_syslog\.module$/', 'modules', 'name', 0);
+      foreach ($matches as $file) {
+        $path = realpath($file->uri);
+        if (ODBC_LOGGING_DEBUG) echo "$path\n";
+        if (file_exists($path)) {
+          include_once($path);
+          break;
+        }
       }
     }
 
-    //  then Syslog
-    $matches = drupal_system_listing('/^bang_syslog\.module$/', 'modules', 'name', 0);
-    foreach ($matches as $matched_name => $file) {
-      $path = realpath($file->uri);
-      if (file_exists($path)) {
-        include_once($path);
-        break;
-      }
-    }
-
-    if (function_exists('bang_syslog__init'))
+    if (ODBC_LOGGING_DEBUG) echo "syslog init\n";
+    if (function_exists('bang_syslog__init')) {
       bang_syslog__init();
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -303,14 +316,17 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     // Whether to use dblog / watchdog / syslog / drush to record debug information
     $this->debug = isset($connection_options['debug']) && (boolean) $connection_options['debug'];
     if ($this->debug) {
-      $this->loadSyslog();
+      $syslog_ok = $this->loadSyslog();
+      $watchdog_ok = function_exists('watchdog');
       $this->log_threshold = $this->severityThreshold(isset($connection_options['log_threshold']) ? $connection_options['log_threshold'] : 'warning');
 
       if (defined('DRUSH_BASE_PATH') || php_sapi_name() == 'cli') $this->logto = 'echo';
-      else if (function_exists('bang_syslog')) $this->logto = 'syslog';
-      else if (function_exists('watchdog')) $this->logto = 'watchdog';
+      else if ($syslog_ok) $this->logto = 'syslog';
+      else if ($watchdog_ok) $this->logto = 'watchdog';
 
       if (ODBC_LOGGING_DEBUG) {
+        echo "<p>Can syslog? ".$syslog_ok."</p>\n";
+        echo "<p>Can watchdog? ".$watchdog_ok."</p>\n";
         echo "<p><b>ODBC Logging to $this->logto</b>\n";
       }
     }
@@ -320,7 +336,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
 
     // We don't need a specific PDOStatement class here, we simulate it using
     // DatabaseStatement_odbc below.
-    $this->statementClass = NULL;
+    $this->statementClass = null;
 
     // Whether to use transactions
     $this->transactionSupport = isset($connection_options['transactions']) ? (boolean) $connection_options['transactions'] : ODBC_USE_TRANSACTIONS;
@@ -335,17 +351,28 @@ class DatabaseConnection_odbc extends DatabaseConnection {
 
     // Build the DSN.
     // TODO: Make this work with a named DSN
-    // TODO: Check whether we pass port information in the same way as sqlsrv
     $options = array();
+    if (isset($connection_options['host'])) {
+      if (strpos($connection_options['host'], ';server=') !== false) {
+        // compatibility mode - the config is using the workaround for Drush, so leave it alone
+        $options[] = 'host='.$connection_options['host'];
+      } else {
+        // normal mode - build it for them
+        $host_option = 'host=;server='.$connection_options['host'];
+        if (!empty($connection_options['port']) && !strpos($host_option, ',') !== false)
+          $host_option .= ','.$connection_options['port'];
+        $options[] = $host_option;
+      }
+    }
+  
+    $options[] = 'database='.$connection_options['database'];
+
     if (isset($connection_options['odbc_driver'])) {
       $options[] = 'driver='.$connection_options['odbc_driver'];
       if ($connection_options['odbc_driver'] == 'FreeTDS' && isset($connection_options['tds_version'])) {
         $options[] = 'TDS_Version='.$connection_options['tds_version'];
       }
     }
-    if (isset($connection_options['host']))
-      $options[] = 'host='.$connection_options['host'].(!empty($connection_options['port']) ? ',' . $connection_options['port'] : '');
-    $options[] = 'database='.$connection_options['database'];
 
     // Launch the connection to the server.
     $dsn = 'odbc:'.implode(';', $options);
@@ -361,13 +388,14 @@ class DatabaseConnection_odbc extends DatabaseConnection {
       // FROM node
       // GROUP BY SUBSTRING(title, 1, :length2);
       // This is only going to work in PDO 3 but doesn't hurt in PDO 2.
-      PDO::ATTR_EMULATE_PREPARES => TRUE,
+      PDO::ATTR_EMULATE_PREPARES => true,
     ));
 
     $this->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
     // Fetch the name of the user-bound schema. It is the schema that SQL Server
     // will use for non-qualified tables.
+    $this->log('DatabaseStatement_odbc: is this log working?', null, WATCHDOG_DEBUG);
     $this->schema()->defaultSchema = $this->query("SELECT SCHEMA_NAME()")->fetchField();
 
     // If running under Drush, fiddle with the connection settings to make sure 
@@ -382,6 +410,8 @@ class DatabaseConnection_odbc extends DatabaseConnection {
         echo "odbc-sqlsrv: Adjusted connection settings\n";
       }
     }
+
+    $this->log('DatabaseStatement_odbc: init', null, WATCHDOG_DEBUG);
   }
 
   /**
@@ -408,6 +438,16 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     return $this->prepare($query);
   }
 
+  public function exec($query) {
+    if (!$this->bypassQueryPreprocess) {
+      $query = $this->preprocessQuery($query);
+    }
+
+    // $query = $this->prefixTables($query);
+
+    return parent::exec($query);
+  }
+
   /**
    * Internal function: prepare a query by calling PDO directly.
    *
@@ -419,9 +459,18 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     if (!$this->bypassQueryPreprocess) {
       $query = $this->preprocessQuery($query);
     }
-    // if ($this->drush) echo "PDOPrepare: $query\n\n"; debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS); echo "\n";
-    $this->log('PDOPrepare: %query', array('%query' => $query));
+    
+    $this->log('PDOPrepare: %query', array('%query' => $query), WATCHDOG_INFO);
     return parent::prepare($query, $options);
+  }
+
+  public function PDOExec($query, array $options = array()) {
+    if (!$this->bypassQueryPreprocess) {
+      $query = $this->preprocessQuery($query);
+    }
+
+    $this->log('PDOExec: %query', array('%query' => $query), WATCHDOG_INFO);
+    return parent::exec($query);
   }
 
   /**
@@ -479,13 +528,16 @@ class DatabaseConnection_odbc extends DatabaseConnection {
       return "''";
     }
 
-    // $quoted = parent::quote($str, $paramType);
-
     $quoted = $str;
     $quoted = $this->encode($quoted);
     // $quoted = str_replace(':', '\:', $quoted);
     // $quoted = str_replace('?', '\?', $quoted);
     $quoted = str_replace("'", "''", $quoted);
+
+    $quoted = str_replace("/\r\n/", "' + CHAR(13)+CHAR(10) + '", $quoted);
+    $quoted = str_replace("\n", "' + CHAR(13)+CHAR(10) + '", $quoted);
+    $quoted = str_replace("\r", "' + CHAR(13)+CHAR(10) + '", $quoted);
+
     $quoted = "'".$quoted."'";
 
     return $quoted;
@@ -535,9 +587,9 @@ class DatabaseConnection_odbc extends DatabaseConnection {
       //   // special case to make sure we're not breaking serialised data
       //   if (preg_match('/(a:[0-9]+:{|s:[0-9]+:")/', $str)) {
       //     $unserialized = unserialize($decoded);
-      //     if ($unserialized == FALSE) {
+      //     if ($unserialized == false) {
       //       $unserialized = unserialize($str);
-      //       if ($unserialized !== FALSE)
+      //       if ($unserialized !== false)
       //         return $str;
       //     }
       //   }
@@ -565,9 +617,9 @@ class DatabaseConnection_odbc extends DatabaseConnection {
       // // special case to make sure we're not breaking serialised data
       // if (preg_match('/(a:[0-9]+:{|s:[0-9]+:")/', $str)) {
       //   $unserialized = unserialize($decoded);
-      //   if ($unserialized == FALSE) {
+      //   if ($unserialized == false) {
       //     $unserialized = unserialize($str);
-      //     if ($unserialized !== FALSE)
+      //     if ($unserialized !== false)
       //       return $str;
       //   }
       // }
@@ -602,22 +654,11 @@ class DatabaseConnection_odbc extends DatabaseConnection {
    * Override of DatabaseConnection::query().
    */
   public function query($query, array $args = array(), $options = array()) {
+    $this->log('DatabaseStatement_odbc: query: %query', array('%query' => $query), WATCHDOG_DEBUG);
     try {
-      if (is_string($query)) {
-        if (empty($args))
-          $this->log('ODBC: Prepreparing: %query', array('%query' => $query), WATCHDOG_DEBUG);
-        else
-          $this->log('ODBC: Prepreparing: %query with args: %args', array('%query' => $query, '%args' => $args), WATCHDOG_DEBUG);
-
-        $sql = $this->replacePlaceholders($query, $args);
-        $this->log('ODBC: Preprepared: %sql', array('%sql' => $sql), WATCHDOG_DEBUG);
-        return parent::query($sql, array(), $options);
-      } else {
-        $this->log('Not prepreparing: %query', array('%query' => $query, '%args' => $args), WATCHDOG_DEBUG);
-        return parent::query($query, $args, $options);
-      }
+      return parent::query($query, $args, $options);
     } catch (Exception $e) {
-      $this->log(get_class($e).' when executing "%sql" with variables %vars: '.$e->getMessage(), array('%sql' => (string) $query, '%vars' => $args), WATCHDOG_ERROR);
+      $this->log(get_class($e).' when executing "%query" with variables %vars: '.$e->getMessage(), array('%query' => $query, '%vars' => $args), WATCHDOG_ERROR);
       throw $e;
     }
   }
@@ -654,14 +695,14 @@ class DatabaseConnection_odbc extends DatabaseConnection {
    * Internal function: do a manual placeholder replacement for a query.
    * New version to build into a buffer rather than using str_replace, to avoid falling foul of copies of placeholders in error messages
    */
-  public function replacePlaceholders($query, array $args = array(), $inline_values = TRUE, &$replaced_keys = NULL) {
+  public function replacePlaceholders($query, array $args = array(), $inline_values = true, &$replaced_keys = null) {
     if (empty($args))
       return $query;
 
     // make sure the values are all formatted for SQL
     if ($inline_values)
       $args = array_map(array($this, 'inlineValue'), $args);
-    // $this->log('Placeholders in: '.$query, NULL, WATCHDOG_DEBUG);
+    // $this->log('Placeholders in: '.$query, null, WATCHDOG_DEBUG);
     // $this->log('Placeholders: '.json_encode(array_keys($args)));
 
 
@@ -697,14 +738,14 @@ class DatabaseConnection_odbc extends DatabaseConnection {
       $placeholders = array_values($placeholders);
     }
 
-    // $this->log('Placeholder locations: '.json_encode($placeholders), NULL, WATCHDOG_DEBUG);
+    // $this->log('Placeholder locations: '.json_encode($placeholders), null, WATCHDOG_DEBUG);
 
     // build the output buffer
     $buf = "";
     $offset = 0;
     foreach ($placeholders as list($index, $key, $value)) {
       if (is_object($value) || is_array($value)) continue;
-      if (substr($query, $index, strlen($key)) != $key) $this->log("Mismatching placeholder at offset $index: \"".substr($query, $index, strlen($key))."\" != \"$key\"", NULL, WATCHDOG_ERROR);
+      if (substr($query, $index, strlen($key)) != $key) $this->log("Mismatching placeholder at offset $index: \"".substr($query, $index, strlen($key))."\" != \"$key\"", null, WATCHDOG_ERROR);
       $buf .= substr($query, $offset, $index - $offset);
       $buf .= $value;
       $offset = $index + strlen($key);
@@ -869,7 +910,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
       'LIKE' => array('postfix' => " ESCAPE CHAR(92)"),
       'NOT LIKE' => array('postfix' => " ESCAPE CHAR(92)"),
     );
-    return isset($specials[$operator]) ? $specials[$operator] : NULL;
+    return isset($specials[$operator]) ? $specials[$operator] : null;
   }
 
   /**
@@ -906,203 +947,6 @@ class DatabaseConnection_odbc extends DatabaseConnection {
   public function escapeTable($table) {
     // Rescue the # prefix from the escaping.
     return ($table[0] == '#' ? '#' : '') . preg_replace('/[^A-Za-z0-9_.]+/', '', $table);
-  }
-}
-
-class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterator, DatabaseStatementInterface {
-  private $debug = FALSE;
-
-  private function log($message, $variables, $severity) {
-    if (is_null($variables))
-      $variables = array();
-    $variables['this'] = $this;
-    if ($this->debug)
-      $variables['threshold'] = WATCHDOG_DEBUG;
-    $this->dbh->log('DatabaseStatement_odbc: '.$message, $variables, $severity);
-  }
-
-  public function debug() {
-    $this->debug = TRUE;
-    $this->log('Enabling debug');
-  }
-
-  protected function getStatement($query, &$args = array()) {
-    $this->log('getStatement(%query)', array('%query' => $query), WATCHDOG_DEBUG);
-    return $this->dbh->PDOPrepare($query);
-  }
-
-
-  public function fetch($fetch_style = NULL, $cursor_orientation = PDO::FETCH_ORI_NEXT, $cursor_offset = NULL) {
-    $this->log('fetch(%style, %orientation)', array('%style' => $fetch_style, '%orientation' => $cursor_orientation), WATCHDOG_DEBUG);
-    return parent::fetch($fetch_style, $cursor_orientation, $cursor_offset);
-  }
-
-  public function fetchAll($fetch_style = NULL, $fetch_column = NULL, $constructor_args = NULL) {
-    $this->log('fetch(%style, %column)', array('%style' => $fetch_style, '%column' => $fetch_column), WATCHDOG_DEBUG);
-    return parent::fetchAll($fetch_style, $fetch_column, $constructor_args);
-  }
-
-  public function fetchColumn($index = 0) {
-    $this->log('fetchColumn(%index)', array('%index' => $index), WATCHDOG_DEBUG);
-    return parent::fetchColumn($index);
-  }
-
-  public function fetchObject($class_name = NULL, $constructor_args = array()) {
-    $this->log('fetchObject(%class)', array('%class' => $class_name), WATCHDOG_DEBUG);
-    return parent::fetchObject($class_name, $constructor_args);
-  }
-
-  public function rowCount() {
-    $nrows = parent::rowCount();
-    $this->log('rowCount() = %nrows', array('%nrows' => $nrows), WATCHDOG_DEBUG);
-    return $nrows;
-  }
-
-  public function execute($args = array(), $options = array()) {
-    $this->log('execute()', NULL, WATCHDOG_DEBUG);
-
-    if (isset($options['fetch'])) {
-      if (is_string($options['fetch'])) {
-        // Default to an object. Note: db fields will be added to the object
-        // before the constructor is run. If you need to assign fields after
-        // the constructor is run, see http://drupal.org/node/315092.
-        $this->setFetchMode(PDO::FETCH_CLASS, $options['fetch']);
-      }
-      else {
-        $this->setFetchMode($options['fetch']);
-      }
-    }
-
-    $logger = $this->dbh->getLogger();
-    if (!empty($logger)) {
-      $query_start = microtime(TRUE);
-    }
-
-    // Prepare the query.
-    $queryString = $this->dbh->prefixTables($this->queryString);
-
-    if (ODBC_EMULATE_PREPARES) {
-      $queryString = $this->dbh->replacePlaceholders($queryString, $args);
-
-      if (empty($args))
-        $this->log('execute: Preparing query: %query', array('%query' => $this->queryString), WATCHDOG_DEBUG);
-      else
-        $this->log('execute: Preparing query: %query with args: %args', array('%query' => $this->queryString, '%args' => $args), WATCHDOG_DEBUG);
-
-      $statement = $this->getStatement($queryString);
-      
-      if (!$statement) {
-        $this->log('execute: No statement for query "%sql"', array('%sql' => $this->queryString), WATCHDOG_ERROR);
-        $this->throwPDOException();
-      }
-      $return = $statement->execute();
-      if (!$return) {
-        $this->log('execute: Failed to execute query "%sql"', array('%sql' => $this->queryString), WATCHDOG_ERROR);
-        $this->throwPDOException();
-      }
-
-    } else {
-      $this->log('execute: Unemulated? %query', array('%query' => $this->queryString), WATCHDOG_NOTICE);
-
-      $statement = $this->getStatement($queryString, $args);
-      if (!$statement) {
-        $this->log('execute: No statement for query "%sql"', array('%sql' => $this->queryString), WATCHDOG_ERROR);
-        $this->throwPDOException();
-      }
-
-      $return = $statement->execute($args);
-      if (!$return) {
-        $this->log('execute: Failed to execute query "%sql"', array('%sql' => $this->queryString), WATCHDOG_ERROR);
-        $this->throwPDOException();
-      }
-    }
-
-    // Fetch all the data from the reply, in order to release any lock
-    // as soon as possible.
-    $this->rowCount = $statement->rowCount();
-
-    if (preg_match('/^SELECT/', $queryString)) {
-      try {
-        $this->data = $statement->fetchAll(PDO::FETCH_ASSOC);
-        $this->log('execute: Fetched %nrows rows', array('%nrows' => count($this->data)), WATCHDOG_DEBUG);
-
-        //  decode strings if necessary
-        if ($this->dbh->encoding != '') $this->decodeData();
-      }
-      catch (Exception $e) {
-        $this->log(get_class($e).' when executing "%sql": '.$e->getMessage(), array('%sql' => $this->queryString), WATCHDOG_ERROR);
-        debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
-        // tolerate this error and return nothing
-        $this->data = array();
-      }
-    }
-
-    $this->resultRowCount = count($this->data);
-
-    if ($this->resultRowCount) {
-      $this->columnNames = array_keys($this->data[0]);
-    }
-    else {
-      $this->columnNames = array();
-    }
-
-    if (!empty($logger)) {
-      $query_end = microtime(TRUE);
-      $logger->log($this, $args, $query_end - $query_start);
-    }
-
-    // Remove technical columns from the final result set.
-    // TODO: Do we want to rename these options?
-    $droppable_columns = array_flip(isset($options['sqlsrv_drop_columns']) ? $options['sqlsrv_drop_columns'] : array());
-    $dropped_columns = array();
-    foreach ($this->columnNames as $k => $column) {
-      if (substr($column, 0, 2) == '__' || isset($droppable_columns[$column])) {
-        $dropped_columns[] = $column;
-        unset($this->columnNames[$k]);
-      }
-    }
-
-    if ($dropped_columns) {
-      // Renumber columns.
-      $this->columnNames = array_values($this->columnNames);
-
-      foreach ($this->data as $k => $row) {
-        foreach ($dropped_columns as $column) {
-          unset($this->data[$k][$column]);
-        }
-      }
-    }
-
-    // Destroy the statement as soon as possible.
-    $this->log('close', NULL, WATCHDOG_DEBUG);
-    $statement->closeCursor();
-    unset($statement);
-
-    // Initialize the first row in $this->currentRow.
-    $this->next();
-
-    return $return;
-  }
-
-  public function decodeData() {
-    if (!is_array($this->data))
-      return;
-    if (count($this->data) > 0 && isset($this->data[0]) && !is_array($this->data[0]))
-      return;
-
-    $decoded_rows = array();
-    foreach ($this->data as $row) {
-      $decoded_row = array();
-      foreach ($row as $key => $value) {
-        $decoded_value = $this->dbh->decode($value);
-        $decoded_row[$key] = $decoded_value;
-      }
-      $decoded_rows[] = $decoded_row;
-    }
-
-    if ($decoded_rows !== $this->data)
-      $this->log('Decoded %before -> %after', array('%before' => $this->data, '%after' => $decoded_rows), WATCHDOG_DEBUG);
-    $this->data = $decoded_rows;
   }
 }
 

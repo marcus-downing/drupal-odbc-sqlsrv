@@ -17,7 +17,11 @@ class DatabaseSchema_odbc extends DatabaseSchema {
    */
   public $defaultSchema = 'dbo';
 
-  protected $additionalColumnInformation = NULL;
+  protected $additionalColumnInformation = null;
+
+  private function log($message, $variables = null, $severity = WATCHDOG_NOTICE) {
+    $this->connection->log('DatabaseSchema_odbc: '.$message, $variables, $severity);
+  }
 
   /**
    * Database introspection: fetch technical information about a table.
@@ -32,13 +36,13 @@ class DatabaseSchema_odbc extends DatabaseSchema {
       // Don't use {} around information_schema.columns table.
       $result = $this->connection->query("SELECT name AS column_name FROM sys.columns WHERE object_id = OBJECT_ID(:table) AND user_type_id = TYPE_ID(:type)", array(':table' => $table_info['schema'] . '.' . $table_info['table'], ':type' => 'text'));
       foreach ($result as $column) {
-        $this->additionalColumnInformation[$key]['blobs'][$column->column_name] = TRUE;
+        $this->additionalColumnInformation[$key]['blobs'][$column->column_name] = true;
       }
 
       // Don't use {} around system tables.
       $result = $this->connection->query('SELECT name column_name FROM sys.identity_columns WHERE object_id = OBJECT_ID(:table)', array(':table' => $table_info['schema'] . '.' . $table_info['table']));
       foreach ($result as $column) {
-        $this->additionalColumnInformation[$key]['identities'][$column->column_name] = TRUE;
+        $this->additionalColumnInformation[$key]['identities'][$column->column_name] = true;
       }
     }
 
@@ -48,11 +52,11 @@ class DatabaseSchema_odbc extends DatabaseSchema {
   // Sqlsrv TODO: implement the same for alter table and add/remove fields.
   public function createTable($name, $table) {
     // Reset the additional column information because the schema changed.
-    $this->additionalColumnInformation = NULL;
+    $this->additionalColumnInformation = null;
 
     if ($this->tableExists($name)) {
       if (ODBC_FORGIVING) {
-        $this->connection->log('Table %name already exists', array('%name' => $name), WATCHDOG_WARNING);
+        $this->log('Table %name already exists', array('%name' => $name), WATCHDOG_WARNING);
         return;
       }
       throw new DatabaseSchemaObjectExistsException(t('Table %name already exists.', array('%name' => $name)));
@@ -98,17 +102,17 @@ class DatabaseSchema_odbc extends DatabaseSchema {
 
   public function tableExists($table) {
     try {
-      $this->connection->log('tableExists(%table)', array('%table' => $table), WATCHDOG_DEBUG);
+      $table = db_escape_table($table);
+      $this->log('tableExists(%table)', array('%table' => $table), WATCHDOG_DEBUG);
       $query = $this->connection->prefixTables('SELECT TOP(1) 1 FROM {'.$table.'}');
-      $stmt = $this->connection->PDOPrepare($query);
-      $stmt->execute();
-      $this->connection->log('table exists: %table', array('%table' => $table), WATCHDOG_INFO);
-      return TRUE;
+      $this->connection->PDOExec($query);
+      $this->log('Table exists: %table', array('%table' => $table), WATCHDOG_INFO);
+      return true;
     }
     catch (PDOException $e) {
-      $this->connection->log(get_class($e).' while checking for table %table: '.$e->getMessage(), array('%table' => $table), WATCHDOG_DEBUG);
-      $this->connection->log('table does not exists: %table', array('%table' => $table), WATCHDOG_INFO);
-      return FALSE;
+      $this->log(get_class($e).' while checking for table %table: '.$e->getMessage(), array('%table' => $table), WATCHDOG_DEBUG);
+      $this->log('Table does not exist: %table', array('%table' => $table), WATCHDOG_INFO);
+      return false;
     }
   }
 
@@ -138,7 +142,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
       $sql_fields[] = 'CONSTRAINT {' . $name . '}_pkey_technical PRIMARY KEY CLUSTERED (__pk)';
     }
 
-    $sql = "CREATE TABLE [{" . $name . "}] (\n\t";
+    $sql = "CREATE TABLE [{" . db_escape_table($name) . "}] (\n\t";
     $sql .= implode(",\n\t", $sql_fields);
     $sql .= "\n)";
     return $sql;
@@ -158,7 +162,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
    * @param $spec
    *    The field specification, as per the schema data structure format.
    */
-  protected function createFieldSql($table, $name, $spec, $skip_checks = FALSE) {
+  protected function createFieldSql($table, $name, $spec, $skip_checks = false) {
     $sql = $this->connection->quoteIdentifier($name) . ' ' . $spec['sqlsrv_type'];
 
     if (in_array($spec['sqlsrv_type'], array('char', 'varchar', 'text', 'nchar', 'nvarchar', 'ntext')) && !empty($spec['length'])) {
@@ -169,7 +173,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
     }
 
     if (isset($spec['not null']) && $spec['not null']) {
-      $sql .= ' NOT NULL';
+      $sql .= ' NOT null';
     }
 
     if (!$skip_checks) {
@@ -228,7 +232,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
       $field['sqlsrv_type'] = $map[$field['type'] . ':' . $field['size']];
     }
     if ($field['type'] == 'serial') {
-      $field['identity'] = TRUE;
+      $field['identity'] = true;
     }
     return $field;
   }
@@ -331,14 +335,14 @@ class DatabaseSchema_odbc extends DatabaseSchema {
   public function renameTable($table, $new_name) {
     if (!$this->tableExists($table)) {
       if (ODBC_FORGIVING) {
-        $this->connection->log("Cannot rename %table to %table_new: table %table doesn't exist.", array('%table' => $table, '%table_new' => $new_name), WATCHDOG_WARNING);
+        $this->log("Cannot rename %table to %table_new: table %table doesn't exist.", array('%table' => $table, '%table_new' => $new_name), WATCHDOG_WARNING);
         return;
       }
       throw new DatabaseSchemaObjectDoesNotExistException(t("Cannot rename %table to %table_new: table %table doesn't exist.", array('%table' => $table, '%table_new' => $new_name)));
     }
     if ($this->tableExists($new_name)) {
       if (ODBC_FORGIVING) {
-        $this->connection->log("Cannot rename %table to %table_new: table %table_new already exists.", array('%table' => $table, '%table_new' => $new_name), WATCHDOG_WARNING);
+        $this->log("Cannot rename %table to %table_new: table %table_new already exists.", array('%table' => $table, '%table_new' => $new_name), WATCHDOG_WARNING);
         return;
       }
       throw new DatabaseSchemaObjectExistsException(t("Cannot rename %table to %table_new: table %table_new already exists.", array('%table' => $table, '%table_new' => $new_name)));
@@ -379,20 +383,20 @@ class DatabaseSchema_odbc extends DatabaseSchema {
    */
   public function dropTable($table) {
     if (!$this->tableExists($table)) {
-      return FALSE;
+      return false;
     }
 
     $this->connection->query('DROP TABLE {' . $table . '}');
-    return TRUE;
+    return true;
   }
 
   public function fieldExists($table, $field) {
     try {
       $this->connection->query('SELECT TOP(1) [' . $field . '] FROM {' . $table . '}');
-      return TRUE;
+      return true;
     }
     catch (PDOException $e) {
-      return FALSE;
+      return false;
     }
   }
 
@@ -407,17 +411,17 @@ class DatabaseSchema_odbc extends DatabaseSchema {
     }
     if ($this->fieldExists($table, $field)) {
       if (ODBC_FORGIVING) {
-        $this->connection->log("Cannot add field %table.%field: field already exists.", array('%field' => $field, '%table' => $table), WATCHDOG_WARNING);
+        $this->log("Cannot add field %table.%field: field already exists.", array('%field' => $field, '%table' => $table), WATCHDOG_WARNING);
         return;
       }
       throw new DatabaseSchemaObjectExistsException(t("Cannot add field %table.%field: field already exists.", array('%field' => $field, '%table' => $table)));
     }
 
-    // If the field is declared NOT NULL, we have to first create it NULL insert
-    // the initial data then switch to NOT NULL.
+    // If the field is declared NOT null, we have to first create it null insert
+    // the initial data then switch to NOT null.
     if (!empty($spec['not null']) && !isset($spec['default'])) {
-      $fixnull = TRUE;
-      $spec['not null'] = FALSE;
+      $fixnull = true;
+      $spec['not null'] = false;
     }
 
     // Create the field.
@@ -426,7 +430,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
     $this->connection->query($query);
 
     // Reset the blob cache.
-    $this->additionalColumnInformation = NULL;
+    $this->additionalColumnInformation = null;
 
     // Load the initial data.
     if (isset($spec['initial'])) {
@@ -435,10 +439,10 @@ class DatabaseSchema_odbc extends DatabaseSchema {
         ->execute();
     }
 
-    // Switch to NOT NULL now.
+    // Switch to NOT null now.
     if (!empty($fixnull)) {
-      $spec['not null'] = TRUE;
-      $this->connection->query('ALTER TABLE {' . $table . '} ALTER COLUMN ' . $this->createFieldSql($table, $field, $this->processField($spec), TRUE));
+      $spec['not null'] = true;
+      $this->connection->query('ALTER TABLE {' . $table . '} ALTER COLUMN ' . $this->createFieldSql($table, $field, $this->processField($spec), true));
     }
 
     // Add the new keys.
@@ -482,11 +486,11 @@ class DatabaseSchema_odbc extends DatabaseSchema {
       ':type' => 'COLUMN',
     ));
 
-    // If the field is declared NOT NULL, we have to first create it NULL insert
-    // the initial data then switch to NOT NULL.
+    // If the field is declared NOT null, we have to first create it null insert
+    // the initial data then switch to NOT null.
     if (!empty($spec['not null']) && !isset($spec['default'])) {
-      $fixnull = TRUE;
-      $spec['not null'] = FALSE;
+      $fixnull = true;
+      $spec['not null'] = false;
     }
 
     // Create a new field.
@@ -497,10 +501,10 @@ class DatabaseSchema_odbc extends DatabaseSchema {
     $field_spec = $this->processField($spec);
     $this->connection->query('UPDATE [{' . $table . '}] SET [' . $field_new . '] = CAST([' . $field . '_old] AS ' . $field_spec['sqlsrv_type'] . ')');
 
-    // Switch to NOT NULL now.
+    // Switch to NOT null now.
     if (!empty($fixnull)) {
-      $spec['not null'] = TRUE;
-      $this->connection->query('ALTER TABLE {' . $table . '} ALTER COLUMN ' . $this->createFieldSql($table, $field_new, $this->processField($spec), TRUE));
+      $spec['not null'] = true;
+      $this->connection->query('ALTER TABLE {' . $table . '} ALTER COLUMN ' . $this->createFieldSql($table, $field_new, $this->processField($spec), true));
     }
 
     // Recreate the primary key.
@@ -532,10 +536,10 @@ class DatabaseSchema_odbc extends DatabaseSchema {
       ':table' => $this->connection->prefixTables('{' . $table . '}'),
     ));
     $columns = array();
-    $valid = FALSE;
+    $valid = false;
     foreach ($result as $column) {
       if ($column->column_name == $field) {
-        $valid = TRUE;
+        $valid = true;
       }
       $columns[] = '[' . $column->column_name . ']' . ($column->is_descending_key ? ' DESC' : '');
     }
@@ -579,14 +583,14 @@ class DatabaseSchema_odbc extends DatabaseSchema {
    */
   public function dropField($table, $field) {
     if (!$this->fieldExists($table, $field)) {
-      return FALSE;
+      return false;
     }
 
     // Drop the related objects.
     $this->dropFieldRelatedObjects($table, $field);
 
     $this->connection->query('ALTER TABLE {' . $table . '} DROP COLUMN ' . $field);
-    return TRUE;
+    return true;
   }
 
   /**
@@ -639,8 +643,8 @@ class DatabaseSchema_odbc extends DatabaseSchema {
       throw new DatabaseSchemaObjectDoesNotExistException(t("Cannot set default value of field %table.%field: field doesn't exist.", array('%table' => $table, '%field' => $field)));
     }
 
-    if ($default === NULL) {
-      $default = 'NULL';
+    if ($default === null) {
+      $default = 'null';
     }
     elseif (is_string($default)) {
       $default = "'" . addslashes($spec['default']) . "'";
@@ -688,7 +692,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
     }
 
     $this->connection->query('ALTER TABLE [{' . $table . '}] ADD CONSTRAINT {' . $table . '_pkey} PRIMARY KEY (' . $this->createKeySql($fields) . ')');
-    return TRUE;
+    return true;
   }
 
   /**
@@ -698,7 +702,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
    */
   public function dropPrimaryKey($table) {
     if (!$this->primaryKeyName($table)) {
-      return FALSE;
+      return false;
     }
 
     $this->connection->query('ALTER TABLE [{' . $table . '}] DROP CONSTRAINT {' . $table . '_pkey}');
@@ -706,7 +710,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
     $this->createTechnicalPrimaryColumn($table);
     $this->connection->query('ALTER TABLE [{' . $table . '}] ADD CONSTRAINT {' . $table . '}_pkey_technical PRIMARY KEY CLUSTERED (__pk)');
 
-    return TRUE;
+    return true;
   }
 
   /**
@@ -777,7 +781,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
     }
     $column_expression = implode(' + ', $column_expression);
 
-    // Build a computed column based on the expression that replaces NULL
+    // Build a computed column based on the expression that replaces null
     // values with the globally unique identifier generated previously.
     // This is (very) unlikely to result in a collision with any actual value
     // in the columns of the unique key.
@@ -792,7 +796,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
    */
   public function dropUniqueKey($table, $name) {
     if (!$this->uniqueKeyExists($table, $name)) {
-      return FALSE;
+      return false;
     }
 
     $this->connection->query('DROP INDEX ' . $name . '_unique ON [{' . $table . '}]');
@@ -838,11 +842,11 @@ class DatabaseSchema_odbc extends DatabaseSchema {
    */
   public function dropIndex($table, $name) {
     if (!$this->indexExists($table, $name)) {
-      return FALSE;
+      return false;
     }
 
     $this->connection->query('DROP INDEX ' . $name . '_idx ON [{' . $table . '}]');
-    return TRUE;
+    return true;
   }
 
   /**

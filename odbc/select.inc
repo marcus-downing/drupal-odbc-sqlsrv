@@ -1,7 +1,7 @@
 <?php
 
 class SelectQuery_odbc extends SelectQuery {
-  private $debug = FALSE;
+  private $debug = false;
 
   private function log($message, $variables, $severity) {
     if (is_null($variables))
@@ -13,7 +13,7 @@ class SelectQuery_odbc extends SelectQuery {
   }
 
   public function debug() {
-    $this->debug = TRUE;
+    $this->debug = true;
     $this->log('Enabling debug');
   }
 
@@ -23,7 +23,7 @@ class SelectQuery_odbc extends SelectQuery {
    * Ensure that all the fields in ORDER BY and GROUP BY are part of the
    * main query.
    */
-  public function preExecute(SelectQueryInterface $query = NULL) {
+  public function preExecute(SelectQueryInterface $query = null) {
     // If no query object is passed in, use $this.
     if (!isset($query)) {
      $query = $this;
@@ -31,7 +31,7 @@ class SelectQuery_odbc extends SelectQuery {
 
     // Only execute this once.
     if ($this->isPrepared()) {
-     return TRUE;
+     return true;
     }
 
     // Execute standard pre-execution first.

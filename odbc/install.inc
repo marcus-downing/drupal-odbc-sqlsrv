@@ -28,11 +28,11 @@ class DatabaseTasks_odbc extends DatabaseTasks {
    */
   function initializeDatabase() {
     $database = Database::getConnection();
-    $database->bypassQueryPreprocess = TRUE;
+    $database->bypassQueryPreprocess = true;
     try {
       // SUBSTRING() function.
       $database->query(<<< EOF
-IF OBJECT_ID (N'SUBSTRING', N'FN') IS NOT NULL BEGIN DROP FUNCTION SUBSTRING END
+IF OBJECT_ID (N'SUBSTRING', N'FN') IS NOT null BEGIN DROP FUNCTION SUBSTRING END
 EOF
       );
       $database->query(<<< EOF
@@ -45,7 +45,7 @@ EOF
 
       // SUBSTRING_INDEX() function.
       $database->query(<<< EOF
-IF OBJECT_ID (N'SUBSTRING_INDEX', N'FN') IS NOT NULL BEGIN DROP FUNCTION SUBSTRING_INDEX END
+IF OBJECT_ID (N'SUBSTRING_INDEX', N'FN') IS NOT null BEGIN DROP FUNCTION SUBSTRING_INDEX END
 EOF
       );
       $database->query(<<< EOF
@@ -89,7 +89,7 @@ EOF
 
       // GREATEST() function.
       $database->query(<<< EOF
-IF OBJECT_ID (N'GREATEST', N'FN') IS NOT NULL BEGIN DROP FUNCTION GREATEST END
+IF OBJECT_ID (N'GREATEST', N'FN') IS NOT null BEGIN DROP FUNCTION GREATEST END
 EOF
       );
       $database->query(<<< EOF
@@ -104,7 +104,7 @@ EOF
 
       // CONCAT() function.
       $database->query(<<< EOF
-IF OBJECT_ID (N'CONCAT', N'FN') IS NOT NULL BEGIN DROP FUNCTION CONCAT END
+IF OBJECT_ID (N'CONCAT', N'FN') IS NOT null BEGIN DROP FUNCTION CONCAT END
 EOF
       );
       $database->query(<<< EOF
@@ -119,7 +119,7 @@ EOF
 
       // IF(expr1, expr2, expr3) function.
       $database->query(<<< EOF
-IF OBJECT_ID (N'IF', N'FN') IS NOT NULL BEGIN DROP FUNCTION [IF] END
+IF OBJECT_ID (N'IF', N'FN') IS NOT null BEGIN DROP FUNCTION [IF] END
 EOF
       );
       $database->query(<<< EOF
@@ -131,7 +131,7 @@ BEGIN
 END
 EOF
       );
-      $database->bypassQueryPreprocess = FALSE;
+      $database->bypassQueryPreprocess = false;
     }
     catch (Exception $e) {
       $this->fail(st('Drupal could not be correctly setup with the existing database. Revise any errors.'));
@@ -142,7 +142,7 @@ EOF
   public function getFormOptions($database) {
     $form = parent::getFormOptions($database);
     // Make username not required.
-    $form['username']['#required'] = TRUE;
+    $form['username']['#required'] = true;
     // Add a description for about leaving username blank.
     $form['username']['#description'] = t('Leave username (and password) blank to use Windows authentication. (Not supported with ODBC)');
 
