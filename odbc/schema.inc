@@ -75,6 +75,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
       }
     }
     catch (Exception $e) {
+      $this->log('createTable: '.get_class($e).' when inserting table %name', array('%name' => $name), WATCHDOG_ERROR);
       $transaction->rollback();
       throw $e;
     }

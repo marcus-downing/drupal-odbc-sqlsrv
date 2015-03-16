@@ -169,12 +169,14 @@ class DatabaseConnection_odbc extends DatabaseConnection {
         $message = $this->logReplacePlaceholders($message, $variables);
 
         $sev = $this->logSeverity($severity);
-        echo "$sevc$prefix($sev)$reset $message";
+        echo "$sevc$prefix($sev) $message$reset";
         if (!empty($variables)) {
           echo "    $magenta";
           print_r($variables);
         }
         echo "\n";
+        if ($severity <= WATCHDOG_ERROR)
+          debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
         break;
       
       case 'drush':
@@ -524,22 +526,35 @@ class DatabaseConnection_odbc extends DatabaseConnection {
   public function quote($str, $paramType = PDO::PARAM_STR) {
     if (is_null($str)) return '';
     if (is_array($str)) {
-      $this->log('Attempt to use array as parameter: %arr', array('%arr' => $str));
+      $this->log('Attempt to use array as string parameter: %arr', array('%arr' => $str), WATCHDOG_NOTICE);
+      return "''";
+    }
+    if (is_object($str)) {
+      $this->log('Attempt to use object as string parameter: %arr', array('%arr' => $str), WATCHDOG_NOTICE);
       return "''";
     }
 
     $quoted = $str;
+    if (ODBC_LOGGING_DEBUG) echo "Quoting string: original = $quoted";
     $quoted = $this->encode($quoted);
+    if (ODBC_LOGGING_DEBUG) echo "Quoting string: encoded = $quoted";
     // $quoted = str_replace(':', '\:', $quoted);
     // $quoted = str_replace('?', '\?', $quoted);
     $quoted = str_replace("'", "''", $quoted);
+    if (ODBC_LOGGING_DEBUG) echo "Quoting string: quotes replaced = $quoted";
 
-    $quoted = str_replace("/\r\n/", "' + CHAR(13)+CHAR(10) + '", $quoted);
-    $quoted = str_replace("\n", "' + CHAR(13)+CHAR(10) + '", $quoted);
-    $quoted = str_replace("\r", "' + CHAR(13)+CHAR(10) + '", $quoted);
+    // replace newlines with character codes
+    //  \n = CHAR(10)
+    //  \r = CHAR(13)
+    $quoted = preg_replace("/\r\n/", "'+CHAR(13)+CHAR(10)+'", $quoted);
+    $quoted = preg_replace("/\n/", "'+CHAR(10)+'", $quoted);
+    $quoted = preg_replace("/\r/", "'+CHAR(13)+'", $quoted);
+
+    if (ODBC_LOGGING_DEBUG) echo "Quoting string: newlines = $quoted";
 
     $quoted = "'".$quoted."'";
 
+    if (ODBC_LOGGING_DEBUG) echo "Quoting string: quoted = $quoted";
     return $quoted;
   }
 
@@ -658,7 +673,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     try {
       return parent::query($query, $args, $options);
     } catch (Exception $e) {
-      $this->log(get_class($e).' when executing "%query" with variables %vars: '.$e->getMessage(), array('%query' => $query, '%vars' => $args), WATCHDOG_ERROR);
+      $this->log('query: '.get_class($e).' when executing "%query" with variables %vars: '.$e->getMessage(), array('%query' => $query, '%vars' => $args), WATCHDOG_ERROR);
       throw $e;
     }
   }
@@ -700,8 +715,10 @@ class DatabaseConnection_odbc extends DatabaseConnection {
       return $query;
 
     // make sure the values are all formatted for SQL
-    if ($inline_values)
+    if ($inline_values) {
       $args = array_map(array($this, 'inlineValue'), $args);
+      if (ODBC_LOGGING_DEBUG) echo('replacePlaceholders: values = '.print_r($args, true)."\n");
+    }
     // $this->log('Placeholders in: '.$query, null, WATCHDOG_DEBUG);
     // $this->log('Placeholders: '.json_encode(array_keys($args)));
 
@@ -738,13 +755,13 @@ class DatabaseConnection_odbc extends DatabaseConnection {
       $placeholders = array_values($placeholders);
     }
 
-    // $this->log('Placeholder locations: '.json_encode($placeholders), null, WATCHDOG_DEBUG);
+    if (ODBC_LOGGING_DEBUG) echo('replacePlaceholder: locations = '.print_r($placeholders, true)."\n");
 
     // build the output buffer
     $buf = "";
     $offset = 0;
     foreach ($placeholders as list($index, $key, $value)) {
-      if (is_object($value) || is_array($value)) continue;
+      if (is_object($value) || is_array($value)) { $this->log('Skipping obj/array argument: '.print_r($value, true), null, WATCHDOG_NOTICE); continue; }
       if (substr($query, $index, strlen($key)) != $key) $this->log("Mismatching placeholder at offset $index: \"".substr($query, $index, strlen($key))."\" != \"$key\"", null, WATCHDOG_ERROR);
       $buf .= substr($query, $offset, $index - $offset);
       $buf .= $value;

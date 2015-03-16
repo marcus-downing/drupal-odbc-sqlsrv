@@ -162,7 +162,7 @@ class InsertQuery_odbc extends InsertQuery {
         $inserted = true;
       }
       catch (Exception $e) {
-        $this->log(get_class($e).' when executing "%sql" with values %values: '.$e->getMessage(), array('%sql' => $queryString, '%values' => $values), WATCHDOG_ERROR);
+        $this->log('execute: '.get_class($e).' when executing "%sql" with values %values: '.$e->getMessage(), array('%sql' => $queryString, '%values' => $values), WATCHDOG_ERROR);
 
         if (!empty($transaction))
           $transaction->rollback();
@@ -410,7 +410,7 @@ class UpdateQuery_odbc extends UpdateQuery {
       $stmt->closeCursor();
       return $nrows;
     } catch (Exception $e) {
-      $this->log(get_class($e).' when executing "%sql" with variables %vars: %error', array('%sql' => (string) $this, '%vars' => $values, '%error' => $e->getMessage()), WATCHDOG_ERROR);
+      $this->log('execute: '.get_class($e).' when executing "%sql" with variables %vars: %error', array('%sql' => (string) $this, '%vars' => $values, '%error' => $e->getMessage()), WATCHDOG_ERROR);
 
       if (!empty($transaction))
         $transaction->rollback();
