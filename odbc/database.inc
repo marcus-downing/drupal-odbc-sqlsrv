@@ -70,6 +70,8 @@ if (!defined('ODBC_ENCODING')) define('ODBC_ENCODING', 'u');
  * 2 = A totally unreasonable amount of debugging
  */
 if (!defined('ODBC_LOGGING_DEBUG')) define('ODBC_LOGGING_DEBUG', 0);
+if (!defined('ODBC_HEX_DEBUG')) define('ODBC_HEX_DEBUG', 0);
+if (!defined('ODBC_LOG_COLOUR')) define('ODBC_LOG_COLOUR', false);
 
 
 
@@ -143,7 +145,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
         $sevc = '';
         $reset = '';
         $magenta = '';
-        if (function_exists('bang_syslog_colors')) {
+        if (ODBC_LOG_COLOUR && function_exists('bang_syslog_colors')) {
           extract(bang_syslog_colors());
 
           switch ($severity) {
@@ -207,6 +209,34 @@ class DatabaseConnection_odbc extends DatabaseConnection {
         watchdog('odbc-sqlsrv', $prefix.$message, $variables, $severity, $link);
         break;
     }
+  }
+
+  private function hex_dump($data, $newline="\n") {
+    static $from = '';
+    static $to = '';
+
+    static $width = 16; # number of bytes per line
+
+    static $pad = '.'; # padding for non-visible characters
+
+    if ($from==='') {
+      for ($i = 0; $i <= 0xFF; $i++) {
+        $from .= chr($i);
+        $to .= ($i >= 0x20 && $i <= 0x7E) ? chr($i) : $pad;
+      }
+    }
+
+    $hex = str_split(bin2hex($data), $width*2);
+    $chars = str_split(strtr($data, $from, $to), $width);
+
+    $offset = 0;
+    $w = $width * 3 - 1;
+    foreach ($hex as $i => $line) {
+      $hex = implode(' ', str_split($line,2));
+      echo sprintf('%6X',$offset).' : '.sprintf('%-'.$w.'s', $hex). ' [' . $chars[$i] . ']' . $newline;
+      $offset += $width;
+    }
+    echo $newline;
   }
 
   private function logReplacePlaceholders($message, &$variables) {
@@ -535,13 +565,16 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     }
 
     $quoted = $str;
-    if (ODBC_LOGGING_DEBUG) echo "Quoting string: original = $quoted";
+    if (ODBC_LOGGING_DEBUG) echo "Quoting string: original = [[ $quoted ]]\n";
+    if (ODBC_HEX_DEBUG) { echo "Quoting string: original (md5: ".md5($quoted).")\n"; $this->hex_dump($quoted); }
     $quoted = $this->encode($quoted);
-    if (ODBC_LOGGING_DEBUG) echo "Quoting string: encoded = $quoted";
+    if (ODBC_LOGGING_DEBUG) echo "Quoting string: encoded  = [[ $quoted ]]\n";
+    if (ODBC_HEX_DEBUG) { echo "Quoting string: encoded (md5: ".md5($quoted).")\n"; $this->hex_dump($quoted); }
     // $quoted = str_replace(':', '\:', $quoted);
     // $quoted = str_replace('?', '\?', $quoted);
     $quoted = str_replace("'", "''", $quoted);
-    if (ODBC_LOGGING_DEBUG) echo "Quoting string: quotes replaced = $quoted";
+    if (ODBC_LOGGING_DEBUG) echo "Quoting string: escaped  = [[ $quoted ]]\n";
+    if (ODBC_HEX_DEBUG) { echo "Quoting string: escaped (md5: ".md5($quoted).")\n"; $this->hex_dump($quoted); }
 
     // replace newlines with character codes
     //  \n = CHAR(10)
@@ -550,11 +583,13 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     $quoted = preg_replace("/\n/", "'+CHAR(10)+'", $quoted);
     $quoted = preg_replace("/\r/", "'+CHAR(13)+'", $quoted);
 
-    if (ODBC_LOGGING_DEBUG) echo "Quoting string: newlines = $quoted";
+    if (ODBC_LOGGING_DEBUG) echo "Quoting string: newlines = [[ $quoted ]]\n";
+    if (ODBC_HEX_DEBUG) { echo "Quoting string: newlines (md5: ".md5($quoted).")\n"; $this->hex_dump($quoted); }
 
     $quoted = "'".$quoted."'";
 
-    if (ODBC_LOGGING_DEBUG) echo "Quoting string: quoted = $quoted";
+    if (ODBC_LOGGING_DEBUG) echo "Quoting string: final    = [[ $quoted ]]\n";
+    if (ODBC_HEX_DEBUG) { echo "Quoting string: final (md5: ".md5($quoted).")\n"; $this->hex_dump($quoted); }
     return $quoted;
   }
 
@@ -669,11 +704,11 @@ class DatabaseConnection_odbc extends DatabaseConnection {
    * Override of DatabaseConnection::query().
    */
   public function query($query, array $args = array(), $options = array()) {
-    $this->log('DatabaseStatement_odbc: query: %query', array('%query' => $query), WATCHDOG_DEBUG);
+    $this->log('DatabaseConnection_odbc: query: %query', array('%query' => $query), WATCHDOG_DEBUG);
     try {
       return parent::query($query, $args, $options);
     } catch (Exception $e) {
-      $this->log('query: '.get_class($e).' when executing "%query" with variables %vars: '.$e->getMessage(), array('%query' => $query, '%vars' => $args), WATCHDOG_ERROR);
+      $this->log('DatabaseConnection_odbc: query: '.get_class($e).' when executing "%query" with variables %vars: '.$e->getMessage(), array('%query' => $query, '%vars' => $args), WATCHDOG_ERROR);
       throw $e;
     }
   }
@@ -717,7 +752,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     // make sure the values are all formatted for SQL
     if ($inline_values) {
       $args = array_map(array($this, 'inlineValue'), $args);
-      if (ODBC_LOGGING_DEBUG) echo('replacePlaceholders: values = '.print_r($args, true)."\n");
+      if (ODBC_LOGGING_DEBUG) echo('replacePlaceholders: values = 『'.print_r($args, true)."』\n");
     }
     // $this->log('Placeholders in: '.$query, null, WATCHDOG_DEBUG);
     // $this->log('Placeholders: '.json_encode(array_keys($args)));
@@ -747,7 +782,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
         while ($pos = strpos($query, $key, $offset)) {
           $known_keys[] = $key;
           $placeholders[$pos] = array($pos, $key, $value);
-          $offset = $pos + 1;
+          $offset = $pos + strlen($key);
         }
       }
       // sort the indices by their position

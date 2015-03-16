@@ -8,7 +8,7 @@ function unicode_x_encode($str) {
 
     $pak = unpack('H*', $ch);
     $codes = str_split($pak[1], 2);
-    if (count($codes) == 1 && $ch != '\\') {
+    if (count($codes) == 1 && $ch != '\\' && $ch != "\000") {
       $encoded .= $ch;
     } else {
       $enc = '\x'.implode('\x', $codes);
