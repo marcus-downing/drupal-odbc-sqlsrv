@@ -189,11 +189,60 @@ It copes fine up to the highest fixed size (`varchar(8000)`, `nvarchar(8000)` an
 I've found it works significantly better if these fields are converted either to `text` if they need to be massive, or a `varchar` or limited size if they need to be used as keys.
 
 
-### Converting an existing database
+## Converting an existing database
 
-Depending what modules you have install, Drupal uses a lot of tables. Copying data from MySQL to SQL Server is less than obvious.
+Depending what modules you have install, Drupal uses a lot of tables. Copying your data from MySQL to SQL Server is less than obvious.
 
-In the `convert/` directory of this module you'll find a number of scripts for reading settings from a MySQL database and writing SQL scripts to import them into a SQL Server database.
+In the `migrage/` directory of this module you'll find a number of scripts for reading settings from a MySQL database and writing SQL scripts to import them into a SQL Server database.
+You should run these scripts on a Linux machine (or Unix/Mac, though that's untested and there may be subtle differences), and if possible on the same machine as the MySQL database.
+
+### Setting up a data source
+
 The actual data is copied using ODBC, which you must enable on your MySQL server first.
 
-**TODO -- actually put these files in**
+...
+
+### Connection settings
+
+Fill in the values in `_settings.sh` with the login details for your MySQL database. You need the `database_name`, `username` and `password`.
+
+```sh
+MYSQL_DATABASE=database_name
+MYSQL_CONNECTION_STRING=-u username --password=password "$MYSQL_DATABASE"
+```
+
+If your database is not on the same machine you're running these scripts, you'll need to add a hostname setting: `-h hostname`.
+
+### Gathering information
+
+Grab necessary information about your database by running these scripts:
+
+```sh
+$ ./fetch_tables.sh
+$ ./fetch_identity_fields.sh
+$ ./fetch_binary_fields.sh
+```
+
+This should generate the files `tables.txt`, `identity_fields.txt` and `binary_fields.txt`, that will be used by the other scripts.
+
+### Generate SQL
+
+Run these scripts to create SQL files.
+
+```sh
+$ ./generate_create_database.sh
+$ ./generate_insert_select.sql
+$ ./generate_convert_binary_fields.sh
+```
+
+This will generate a set of SQL files that you should copy to your SQL Server.
+
+### Importing the data
+
+Run the scripts on your SQL Server database in this order:
+
+- `create_database.sh` to create all the tables. This will probably give you errors the first time you run it; try running it again to clear those up.
+- `import_select.sh` to pull in the data from your MySQL database
+- `restore_primary_fields.sh` to recreate the auto-increment fields
+- `convert_binary_fields.sh` to turn `varchar(max)` and `varbinary(max)` fields into `text`
+- `manual_fix.sh` to fix a couple of things.
