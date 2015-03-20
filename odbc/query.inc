@@ -70,46 +70,6 @@ class InsertQuery_odbc extends InsertQuery {
 
         throw $e;
       }
-
-
-      /*
-      if (ODBC_EMULATE_PREPARES) {
-        $queryString = $this->connection->prefixTables((string) $this);
-        $arguments = $this->fromQuery->getArguments();
-
-        $this->log('execute: Preparing insert-from-query: %query with args: %args', array('%query' => $queryString, '%args' => $arguments), WATCHDOG_DEBUG);
-        $queryString = $this->connection->replacePlaceholders($queryString, $arguments);
-
-        $this->log('execute: Prepared insert-from-query: %query', array('%query' => $queryString), WATCHDOG_DEBUG);
-        $stmt = $this->connection->PDOPrepare($queryString);
-      } else {
-        $stmt = $this->connection->PDOPrepare($this->connection->prefixTables((string) $this));
-        // Handle the case of SELECT-based INSERT queries first.
-        $values = $this->fromQuery->getArguments();
-        $this->log('execute: Binding insert-from-query: %query with args: %args', array('%query' => $queryString, '%args' => $values), WATCHDOG_DEBUG);
-        foreach ($values as $key => $value) {
-          $stmt->bindParam($key, $values[$key]);
-        }
-      }
-
-      try {
-        $this->log('execute', null, WATCHDOG_INFO);
-        // else if ($this->connection->drush)
-        $stmt->execute();
-        $stmt->closeCursor();
-      }
-      catch (Exception $e) {
-        $this->log(get_class($e).' when executing "%sql" with values %vars: '.$e->getMessage(), array('%sql' => (string) $this, '%vars' => $values), WATCHDOG_ERROR);
-        // This INSERT query failed, rollback everything if we started a transaction earlier.
-        if (!empty($transaction)) {
-          $transaction->rollback();
-        }
-        // Rethrow the exception.
-        throw $e;
-      }
-
-      return $this->connection->lastInsertId();
-      */
     }
 
     // Handle the case of full-default queries.
@@ -177,65 +137,6 @@ class InsertQuery_odbc extends InsertQuery {
     if ($inserted)
       return $this->connection->lastInsertId();
     return null;
-
-
-    /*
-    $query = (string) $this;
-    $queryString = $this->connection->prefixTables($query);
-    $stmt = $this->connection->PDOPrepare($queryString);
-    $this->log('Binding "%sql"', array('%sql' => $queryString), WATCHDOG_DEBUG);
-
-    // We use this array to store references to the blob handles.
-    // This is necessary because the PDO will otherwise messes up with references.
-    $data_values = array();
-
-    foreach ($this->insertValues as $insert_index => $insert_values) {
-      $max_placeholder = 0;
-      $this->log('Values: %values', array('%values' => $insert_values), WATCHDOG_DEBUG);
-
-      foreach ($this->insertFields as $field_index => $field) {
-        $placeholder = ':db_insert' . $max_placeholder;
-        if ($this->debug) echo "<p>Assigning placeholder $placeholder to field $field_index<p>";
-        $max_placeholder++;
-        if (isset($columnInformation['blobs'][$field])) {
-          $data_values[$placeholder . $insert_index] = fopen('php://memory', 'a');
-          fwrite($data_values[$placeholder . $insert_index], $insert_values[$field_index]);
-          rewind($data_values[$placeholder . $insert_index]);
-
-          // Need to consider PDO_ODBC equivalent technique if relevant
-          //$stmt->bindParam($placeholder, $data_values[$placeholder . $insert_index], PDO::PARAM_LOB, 0, PDO::SQLSRV_ENCODING_BINARY);
-        }
-        else {
-          $this->log('Value %placeholder at index %index', array('%placeholder' => $placeholder, '%index' => $insert_index), WATCHDOG_DEBUG);
-          $data_values[$placeholder . $insert_index] = $insert_values[$field_index];
-          $stmt->bindParam($placeholder, $data_values[$placeholder . $insert_index]);
-        }
-      }
-
-      try {
-        $this->log('executing', null, WATCHDOG_INFO);
-        $stmt->execute();
-      }
-      catch (Exception $e) {
-        $this->log(get_class($e).' when executing "%sql" with values %vars: '.$e->getMessage(), array('%sql' => (string) $this, '%vars' => $insert_values), WATCHDOG_ERROR);
-
-        // This INSERT query failed, rollback everything if we started a transaction earlier.
-        if (!empty($transaction)) {
-          $transaction->rollback();
-        }
-        // Rethrow the exception.
-        throw $e;
-      }
-
-      $last_insert_id = $this->connection->lastInsertId();
-    }
-
-    $stmt->closeCursor();
-    // Re-initialize the values array so that we can re-use this query.
-    $this->insertValues = array();
-
-    return $last_insert_id;
-    */
   }
 
   public function __toString() {
@@ -399,6 +300,17 @@ class UpdateQuery_odbc extends UpdateQuery {
       $values = array_merge($values, $arguments);
     }
 
+    if ($this->expressionFields) {
+      $expression_values = array();
+      foreach ($this->expressionFields as $field => $data) {
+        // $this->log('execute: Adding expression values', $data['arguments'], WATCHDOG_DEBUG);
+        $expression_values = array_merge($data['arguments'], $expression_values);
+      }
+      if ($intersection = array_intersect_key($values, $expression_values))
+        $this->log('execute: Conflict between values and expression values! %intersection', array('%intersection' => $intersection), WATCHDOG_DEBUG);
+      $values = array_merge($values, $expression_values);
+    }
+
     try {
       $updateString = $this->connection->replacePlaceholders($queryString, $values);
       $this->log('execute: Prepared: "%query"', array('%query' => $updateString), WATCHDOG_DEBUG);
@@ -418,70 +330,6 @@ class UpdateQuery_odbc extends UpdateQuery {
       throw $e;
     }
 
-    /*
-    }
-
-    // Because we filter $fields the same way here and in __toString(), the
-    // placeholders will all match up properly.
-    $stmt = $this->connection->PDOPrepare($this->connection->prefixTables((string)$this));
-
-    // Fetch the list of blobs and sequences used on that table.
-    $columnInformation = $this->connection->schema()->queryColumnInformation($this->table);
-
-    // Expressions take priority over literal fields, so we process those first
-    // and remove any literal fields that conflict.
-    $fields = $this->fields;
-    $expression_fields = array();
-    foreach ($this->expressionFields as $field => $data) {
-      if (!empty($data['arguments'])) {
-        foreach ($data['arguments'] as $placeholder => $argument) {
-          // We assume that an expression will never happen on a BLOB field,
-          // which is a fairly safe assumption to make since in most cases
-          // it would be an invalid query anyway.
-          $stmt->bindParam($placeholder, $data['arguments'][$placeholder]);
-        }
-      }
-      unset($fields[$field]);
-    }
-
-    // We use this array to store references to the blob handles.
-    // This is necessary because the PDO will otherwise messes up with references.
-    $blobs = array();
-    $blob_count = 0;
-
-    foreach ($fields as $field => $value) {
-      $placeholder = ':db_update_placeholder_' . ($max_placeholder++);
-
-      if (isset($columnInformation['blobs'][$field])) {
-        $blobs[$blob_count] = fopen('php://memory', 'a');
-        fwrite($blobs[$blob_count], $value);
-        rewind($blobs[$blob_count]);
-        // Again, do we need a PDO_ODBC specific way of dealing with binary encoings
-        //$stmt->bindParam($placeholder, $blobs[$blob_count], PDO::PARAM_LOB, 0, PDO::SQLSRV_ENCODING_BINARY);
-        $blob_count++;
-      }
-      else {
-        $stmt->bindParam($placeholder, $fields[$field]);
-      }
-    }
-
-    if (count($this->condition)) {
-      $this->condition->compile($this->connection, $this);
-
-      $arguments = $this->condition->arguments();
-      foreach ($arguments as $placeholder => $value) {
-        $stmt->bindParam($placeholder, $arguments[$placeholder]);
-      }
-    }
-
-    $options = $this->queryOptions;
-    $options['already_prepared'] = true;
-    $stmt->execute();
-
-    $nrows = $stmt->rowCount();
-    $stmt->closeCursor();
-    return $nrows;
-    */
   }
 
   public function __toString() {
@@ -518,6 +366,36 @@ class UpdateQuery_odbc extends UpdateQuery {
  * SQL Server-specific implementation of TRUNCATE.
  */
 class TruncateQuery_odbc extends TruncateQuery {
+  private $debug = false;
+
+  private function log($message, $variables, $severity) {
+    if (is_null($variables))
+      $variables = array();
+    $variables['this'] = $this;
+    if ($this->debug)
+      $variables['threshold'] = WATCHDOG_DEBUG;
+    $this->connection->log('TruncateQuery_odbc: '.$message, $variables, $severity);
+  }
+
+  public function debug() {
+    $this->debug = true;
+    $this->log('Enabling debug');
+  }
+
+  public function execute() {
+    $this->log('execute', array(), WATCHDOG_DEBUG);
+
+    try {
+      return parent::execute();
+    } catch (Exception $e) {
+      $this->log('execute: '.get_class($e).' when executing: %error', array('%error' => $e->getMessage()), WATCHDOG_ERROR);
+
+      // if (!empty($transaction))
+      //   $transaction->rollback();
+      
+      throw $e;
+    }
+  }
 
   public function __toString() {
     // Create a sanitized comment string to prepend to the query.
@@ -531,12 +409,126 @@ class TruncateQuery_odbc extends TruncateQuery {
  * SQL Server-specific implementation of the MERGE operation.
  */
 class MergeQuery_odbc extends MergeQuery {
+  private $debug = false;
+
+  private function log($message, $variables, $severity) {
+    if (is_null($variables))
+      $variables = array();
+    $variables['this'] = $this;
+    if ($this->debug)
+      $variables['threshold'] = WATCHDOG_DEBUG;
+    $this->connection->log('MergeQuery_odbc: '.$message, $variables, $severity);
+  }
+
+  public function debug() {
+    $this->debug = true;
+    $this->log('Enabling debug');
+  }
+
+  public function execute() {
+    $this->log('execute', array(), WATCHDOG_DEBUG);
+
+    try {
+      return parent::execute();
+    } catch (Exception $e) {
+      $this->log('execute: '.get_class($e).' when executing: %error', array('%error' => $e->getMessage()), WATCHDOG_ERROR);
+
+      // if (!empty($transaction))
+      //   $transaction->rollback();
+      
+      throw $e;
+    }
+  }
+
+  /*
+  public function execute() {
+    if (!count($this->condition)) {
+      throw new InvalidMergeQueryException(t('Invalid merge query: no conditions'));
+    }
+    $select = $this->connection->select($this->conditionTable)
+      ->condition($this->condition);
+    $select->addExpression('1');
+    if (!$select->execute()->fetchField()) {
+      try {
+        $insert = $this->connection->insert($this->table)->fields($this->insertFields);
+        if ($this->defaultFields) {
+          $insert->useDefaults($this->defaultFields);
+        }
+        $insert->execute();
+        return self::STATUS_INSERT;
+      }
+      catch (Exception $e) {
+        // The insert query failed, maybe it's because a racing insert query
+        // beat us in inserting the same row. Retry the select query, if it
+        // returns a row, ignore the error and continue with the update
+        // query below.
+        if (!$select->execute()->fetchField()) {
+          throw $e;
+        }
+      }
+    }
+    if ($this->needsUpdate) {
+      $update = $this->connection->update($this->table)
+        ->fields($this->updateFields)
+        ->condition($this->condition);
+      if ($this->expressionFields) {
+        foreach ($this->expressionFields as $field => $data) {
+          $update->expression($field, $data['expression'], $data['arguments']);
+        }
+      }
+      $update->execute();
+      return self::STATUS_UPDATE;
+     }
+  }
+  */
   
+  /*
   public function execute() {
     // We don't need INSERT or UPDATE queries to trigger additional transactions.
     // TODO: Do we want to rename this option
     $this->queryOptions['sqlsrv_skip_transactions'] = true;
 
-    return parent::execute();
-  }
+
+    // Expressions take priority over literal fields, so we process those first
+    // and remove any literal fields that conflict.
+    $fields = $this->fields;
+    $update_values = array();
+    foreach ($this->expressionFields as $field => $data) {
+      if (!empty($data['arguments'])) {
+        $update_values += $data['arguments'];
+      }
+      unset($fields[$field]);
+    }
+
+    // Because we filter $fields the same way here and in __toString(), the
+    // placeholders will all match up properly.
+    $max_placeholder = 0;
+    foreach ($fields as $field => $value) {
+      $update_values[':db_update_placeholder_' . ($max_placeholder++)] = $value;
+    }
+
+    if (count($this->condition)) {
+      $this->condition->compile($this->connection, $this);
+      $update_values = array_merge($update_values, $this->condition->arguments());
+    }
+
+    $queryString = $this->connection->prefixTables((string) $this);
+    $this->log('execute: Preparing query "%query"', array('%query' => $queryString), WATCHDOG_DEBUG);
+
+
+    try {
+      $updateString = $this->connection->replacePlaceholders($queryString, $update_values);
+      $this->log('execute: Prepared: "%query"', array('%query' => $updateString), WATCHDOG_DEBUG);
+
+      return $this->connection->query($updateString, null, $this->queryOptions);
+    } catch (Exception $e) {
+      $this->log('execute: '.get_class($e).' when executing "%sql" with variables %vars: %error', array('%sql' => (string) $this, '%vars' => $values, '%error' => $e->getMessage()), WATCHDOG_ERROR);
+
+      if (!empty($transaction))
+        $transaction->rollback();
+      
+      throw $e;
+    }
+
+  }*/
 }
