@@ -23,13 +23,21 @@ function unicode_x_decode($str) {
   $decoded = preg_replace_callback('/(\\\\x([0-9a-fA-F]{2}))+/', function ($match) {
     
     $codes = str_split($match[0], 4);
-    $codes = array_map(function ($c) {
-      return substr($c, 2);
-    }, $codes);
-    $pak = pack('H*', implode('', $codes));
+    $hex = '';
+    foreach ($codes as $code) {
+      $hex .= substr($c, 2);
+    }
+    // $codes = array_map(function ($c) {
+    //   return substr($c, 2);
+    // }, $codes);
+    $pak = pack('H*', $hex);
 
     return $pak;
   }, $str);
 
   return $decoded;
+}
+
+function unicode_null_encode_decode($str) {
+  return $str;
 }

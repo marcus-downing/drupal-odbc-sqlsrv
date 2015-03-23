@@ -4,6 +4,15 @@
 class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterator, DatabaseStatementInterface {
 	private $debug = false;
 
+	// public $intent;
+
+	// public function intent() {
+	// 	if (empty($this->intent)) {
+	// 		$query = $this->queryString;
+	// 		if ($query)
+	// 	}
+	// }
+
 	private function log($message, $variables = null, $severity = WATCHDOG_NOTICE) {
 		if (is_null($variables))
 			$variables = array();
@@ -96,39 +105,61 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
 		// as soon as possible.
 		$this->rowCount = $statement->rowCount();
 
-		if (preg_match('/^SELECT/', $queryString)) {
+		if ($this->isSelect()) {
 			try {
 				$this->data = $statement->fetchAll(PDO::FETCH_ASSOC);
 				$this->log('execute: Fetched %nrows rows', array('%nrows' => count($this->data)), WATCHDOG_DEBUG);
 
 				//  decode strings if necessary
-				if ($this->dbh->encoding != '') $this->decodeData();
+				$this->decodeData();
 			}
 			catch (Exception $e) {
 				$this->log(get_class($e).' when executing "%sql": '.$e->getMessage(), array('%sql' => $this->queryString), WATCHDOG_ERROR);
-				debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
+				// debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
 				// tolerate this error and return nothing
 				$this->data = array();
 			}
 		}
 
-		$this->resultRowCount = count($this->data);
-
-		if ($this->resultRowCount) {
-			$this->columnNames = array_keys($this->data[0]);
-		}
-		else {
-			$this->columnNames = array();
-		}
+		$this->inferColumnNames();
 
 		if (!empty($logger)) {
 			$query_end = microtime(true);
 			$logger->log($this, $args, $query_end - $query_start);
 		}
 
-		// Remove technical columns from the final result set.
-		// TODO: Do we want to rename these options?
-		$droppable_columns = array_flip(isset($options['sqlsrv_drop_columns']) ? $options['sqlsrv_drop_columns'] : array());
+		if (isset($options['sqlsrv_drop_columns']))
+			$this->dropColumns($options['sqlsrv_drop_columns']);
+
+		// Destroy the statement as soon as possible.
+		$this->log('close', null, WATCHDOG_DEBUG);
+		$statement->closeCursor();
+		unset($statement);
+
+		// Initialize the first row in $this->currentRow.
+		$this->next();
+
+		return $return;
+	}
+
+	function isSelect() {
+		return preg_match('/^SELECT/', $this->queryString);
+	}
+
+	function inferColumnNames() {
+		if (count($this->data)) {
+			$this->columnNames = array_keys($this->data[0]);
+		} else {
+			$this->columnNames = array();
+		}
+	}
+
+	/**
+	 * Remove technical columns from the final result set.
+	 * TODO: Do we want to rename these options?
+	 */
+	function dropColumns($columns) {
+		$droppable_columns = array_flip($columns);
 		$dropped_columns = array();
 		foreach ($this->columnNames as $k => $column) {
 			if (substr($column, 0, 2) == '__' || isset($droppable_columns[$column])) {
@@ -147,36 +178,37 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
 				}
 			}
 		}
-
-		// Destroy the statement as soon as possible.
-		$this->log('close', null, WATCHDOG_DEBUG);
-		$statement->closeCursor();
-		unset($statement);
-
-		// Initialize the first row in $this->currentRow.
-		$this->next();
-
-		return $return;
 	}
 
 	public function decodeData() {
+		if ($this->dbh->encoding == '')
+			return;
 		if (!is_array($this->data))
 			return;
 		if (count($this->data) > 0 && isset($this->data[0]) && !is_array($this->data[0]))
 			return;
 
+		// $this->data = array_map(function ($row) {
+		// 	return array_map(function ($value) {
+		// 		return unicode_x_decode($value);
+		// 	}, $row);
+		// }, $this->data);
+
 		$decoded_rows = array();
-		foreach ($this->data as $row) {
+		$rows = $this->data;
+		reset($rows);
+		foreach ($rows as $row) {
 			$decoded_row = array();
 			foreach ($row as $key => $value) {
-				$decoded_value = $this->dbh->decode($value);
+				$decoded_value = unicode_x_decode($value);
 				$decoded_row[$key] = $decoded_value;
 			}
 			$decoded_rows[] = $decoded_row;
 		}
 
-		if ($decoded_rows !== $this->data)
-			$this->log('Decoded %before -> %after', array('%before' => $this->data, '%after' => $decoded_rows), WATCHDOG_DEBUG);
+		// if ($decoded_rows !== $this->data)
+		// 	$this->log('Decoded %before -> %after', array('%before' => $this->data, '%after' => $decoded_rows), WATCHDOG_DEBUG);
+
 		$this->data = $decoded_rows;
 	}
 }

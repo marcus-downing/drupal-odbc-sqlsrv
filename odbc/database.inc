@@ -231,6 +231,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
 
     $offset = 0;
     $w = $width * 3 - 1;
+    reset($hex);
     foreach ($hex as $i => $line) {
       $hex = implode(' ', str_split($line,2));
       echo sprintf('%6X',$offset).' : '.sprintf('%-'.$w.'s', $hex). ' [' . $chars[$i] . ']' . $newline;
@@ -241,6 +242,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
 
   private function logReplacePlaceholders($message, &$variables) {
     $replacable = array();
+    reset($variables);
     foreach ($variables as $key => $value) {
       if (is_array($value) && empty($value))
         $variables[$key] = '[]';
@@ -252,6 +254,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     }
     $replaced_keys = array();
     $new_message = $this->replacePlaceholders($message, $replacable, false, $replaced_keys);
+    reset($replaced_keys);
     foreach ($replaced_keys as $key)
       unset($variables[$key]);
 
@@ -309,6 +312,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
       //  first load WordPress
       if (ODBC_LOGGING_DEBUG) echo "looking for WordPress module\n";
       $matches = drupal_system_listing('/^wordpress\.module$/', 'modules', 'name', 0);
+      reset($matches);
       foreach ($matches as $file) {
         $path = realpath($file->uri);
         if (ODBC_LOGGING_DEBUG) echo "$path\n";
@@ -321,6 +325,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
       //  then Syslog
       if (ODBC_LOGGING_DEBUG) echo "looking for Syslog module\n";
       $matches = drupal_system_listing('/^bang_syslog\.module$/', 'modules', 'name', 0);
+      reset($matches);
       foreach ($matches as $file) {
         $path = realpath($file->uri);
         if (ODBC_LOGGING_DEBUG) echo "$path\n";
@@ -378,8 +383,17 @@ class DatabaseConnection_odbc extends DatabaseConnection {
 
     // The encoding to use for higher characters
     $this->encoding = isset($connection_options['encoding']) ? $connection_options['encoding'] : ODBC_ENCODING;
-    // if ($this->encoding == 'u' && !ODBC_CAN_ENCODE_UNICODE)
-    //   $this->encoding = 'html';
+
+    if ($this->encoding == 'u') {
+      $this->encode = 'unicode_x_encode';
+      $this->decode = 'unicode_x_decode';
+    } else if ($this->encoding == 'url') {
+      $this->encode = 'urlencode';
+      $this->decode = 'urldecode';
+    } else {
+      $this->encode = 'odbc_null_encode_decode';
+      $this->decode = 'odbc_null_encode_decode';
+    }
 
     // Build the DSN.
     // TODO: Make this work with a named DSN
@@ -544,10 +558,10 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     }
     else {
       // Let other value passthru.
-      for ($i = 2; $i < count($matches); $i++) {
-        if ($matches[$i] !== '') {
-          return $matches[$i];
-        }
+      reset($matches);
+      foreach ($matches as $i => $match) {
+        if ($i < 2) continue;
+        if ($match !== '') return $match;
       }
     }
     return '';
@@ -593,6 +607,17 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     return $quoted;
   }
 
+  public function encode($str) {
+    $fn = $this->encode;
+    return $fn($str);
+  }
+
+  public function decode($str) {
+    $fn = $this->decode;
+    return $fn($str);
+  }
+
+/*
   public function encode($str) {
     if (!is_string($str))
       return $str;
@@ -682,6 +707,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
       return $str;
     }
   }
+*/
 
   public function quoteIdentifier($identifier) {
     return '[' . $identifier .']';
@@ -689,7 +715,17 @@ class DatabaseConnection_odbc extends DatabaseConnection {
 
   public function escapeField($field) {
     if (strlen($field) > 0) {
-      return implode('.', array_map(array($this, 'quoteIdentifier'), explode('.', preg_replace('/[^A-Za-z0-9_.]+/', '', $field))));
+      $fieldname = preg_replace('/[^A-Za-z0-9_.]+/', '', $field);
+      $field_parts = explode('.', $fieldname);
+      $out = '';
+      reset($field_parts);
+      foreach ($field_parts as $part) {
+        if (!empty($out))
+          $out .= '.';
+        $out .= $this->quoteIdentifier($part);
+      }
+      return $out;
+      // return implode('.', array_map(array($this, 'quoteIdentifier'), explode('.', preg_replace('/[^A-Za-z0-9_.]+/', '', $field))));
     }
     else {
       return '';
@@ -697,7 +733,13 @@ class DatabaseConnection_odbc extends DatabaseConnection {
   }
 
   public function quoteIdentifiers($identifiers) {
-    return array_map(array($this, 'quoteIdentifier'), $identifiers);;
+    $out = array();
+    reset($identifiers);
+    foreach ($identifiers as $ident) {
+      $out[]= $this->quoteIdentifier($ident);
+    }
+    return $out;
+    // return array_map(array($this, 'quoteIdentifier'), $identifiers);;
   }
 
   /**
@@ -751,8 +793,9 @@ class DatabaseConnection_odbc extends DatabaseConnection {
 
     // make sure the values are all formatted for SQL
     if ($inline_values) {
-      $args = array_map(array($this, 'inlineValue'), $args);
-      if (ODBC_LOGGING_DEBUG) echo('replacePlaceholders: values = 『'.print_r($args, true)."』\n");
+      $args = $this->inlineValues($args);
+      // $args = array_map(array($this, 'inlineValue'), $args);
+      if (ODBC_LOGGING_DEBUG) echo('replacePlaceholders: values = [[ '.print_r($args, true)." ]]\n");
     }
     // $this->log('Placeholders in: '.$query, null, WATCHDOG_DEBUG);
     // $this->log('Placeholders: '.json_encode(array_keys($args)));
@@ -774,6 +817,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     } else {
       //  using named arguments,  :name
       //  these aren't necessarily in order in SQL, so get positions for all the ones we can find
+      reset($args);
       foreach ($args as $key => $value) {
         if ($key[0] != ':' && $key[0] != '%') {
           $key = ":$key";
@@ -795,6 +839,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     // build the output buffer
     $buf = "";
     $offset = 0;
+    reset($placeholders);
     foreach ($placeholders as list($index, $key, $value)) {
       if (is_object($value) || is_array($value)) { $this->log('Skipping obj/array argument: '.print_r($value, true), null, WATCHDOG_NOTICE); continue; }
       if (substr($query, $index, strlen($key)) != $key) $this->log("Mismatching placeholder at offset $index: \"".substr($query, $index, strlen($key))."\" != \"$key\"", null, WATCHDOG_ERROR);
@@ -815,7 +860,8 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     // if (is_array($value) && count($value) == 1 && isset($value[0]))
     //   $value = $value[0];
     if (is_array($value)) {
-      $values = array_map(array($this, 'inlineValue'), $value);
+      $values = $this->inlineValues($value);
+      // $values = array_map(array($this, 'inlineValue'), $value);
       return implode(', ', $values);
     }
     if (is_string($value))
@@ -827,6 +873,15 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     if (is_int($value))
       return sprintf('%d', $value);
     return $this->quote($value);
+  }
+
+  function inlineValues($values) {
+    $out = array();
+    reset($values);
+    foreach ($values as $key => $value) {
+      $out[$key] = $this->inlineValue($value);
+    }
+    return $out;
   }
 
   /*
@@ -906,16 +961,19 @@ class DatabaseConnection_odbc extends DatabaseConnection {
       'CONCAT',
       'IF',
     );
+    $schema = $this->schema()->defaultSchema;
+    reset($functions);
     foreach ($functions as $function) {
-      $query = preg_replace('/\b(?<![:.])(' . preg_quote($function) . ')\(/i', $this->schema()->defaultSchema . '.$1(', $query);
+      $query = preg_replace('/\b(?<![:.])(' . $function . ')\(/i', $schema . '.$1(', $query);
     }
 
     $replacements = array(
       'LENGTH' => 'LEN',
       'POW' => 'POWER',
     );
+    reset($replacements);
     foreach ($replacements as $function => $replacement) {
-      $query = preg_replace('/\b(?<![:.])(' . preg_quote($function) . ')\(/i', $replacement . '(', $query);
+      $query = preg_replace('/\b(?<![:.])(' . $function . ')\(/i', $replacement . '(', $query);
     }
 
     // Replace the ANSI concatenation operator with SQL Server poor one.

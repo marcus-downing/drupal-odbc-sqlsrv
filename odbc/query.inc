@@ -32,9 +32,12 @@ class InsertQuery_odbc extends InsertQuery {
     $columnInformation = $this->connection->schema()->queryColumnInformation($this->table);
 
     // Find out if there is an identity field set in this insert.
-    foreach ($this->insertFields as $field) {
+    $fields = $this->insertFields;
+    reset($fields);
+    foreach ($fields as $field) {
       if (isset($columnInformation['identities'][$field])) {
         $this->setIdentity = true;
+        break;
       }
     }
 
@@ -102,9 +105,13 @@ class InsertQuery_odbc extends InsertQuery {
     $this->log('Preparing %query', array('%query' => $queryString), WATCHDOG_DEBUG);
 
     $inserted = false;
-    foreach ($this->insertValues as $insert_index => $insert_values) {
+    $insertFields = $this->insertFields;
+    $insertValues = $this->insertValues;
+    reset($insertValues);
+    foreach ($insertValues as $insert_index => $insert_values) {
       $values = array();
-      foreach ($this->insertFields as $field_index => $field) {
+      reset($insertFields);
+      foreach ($insertFields as $field_index => $field) {
         $key = ':db_insert' . $field_index;
         if (isset($insert_values[$field_index])) {
           $values[$key] = $insert_values[$field_index];
@@ -209,6 +216,7 @@ class UpdateQuery_odbc extends UpdateQuery {
 
     // Add the inverse of the fields to the condition.
     $condition = new DatabaseCondition('OR');
+    reset($fields);
     foreach ($fields as $field => $data) {
       if (is_array($data)) {
         // The field is an expression.
@@ -216,6 +224,7 @@ class UpdateQuery_odbc extends UpdateQuery {
         $expression = $data['expression'];
         $arguments = array();
         if (!empty($data['arguments'])) {
+          reset($data['arguments']);
           foreach ($data['arguments'] as $placeholder => $value) {
             $new_placeholder = ':db_exclude_placeholder_' . $this->nextPlaceholder();
             $expression = str_replace($placeholder, $new_placeholder, $expression);
@@ -273,6 +282,7 @@ class UpdateQuery_odbc extends UpdateQuery {
     // }
 
     $values = array();
+    reset($fields);
     foreach ($fields as $field => $value) {
       $placeholder = ':db_update_placeholder_' . ($max_placeholder++);
 
@@ -302,7 +312,9 @@ class UpdateQuery_odbc extends UpdateQuery {
 
     if ($this->expressionFields) {
       $expression_values = array();
-      foreach ($this->expressionFields as $field => $data) {
+      $expression_fields = $this->expressionFields;
+      reset($expression_fields);
+      foreach ($expression_fields as $field => $data) {
         // $this->log('execute: Adding expression values', $data['arguments'], WATCHDOG_DEBUG);
         $expression_values = array_merge($data['arguments'], $expression_values);
       }
@@ -340,12 +352,15 @@ class UpdateQuery_odbc extends UpdateQuery {
     // and remove any literal fields that conflict.
     $fields = $this->fields;
     $update_fields = array();
-    foreach ($this->expressionFields as $field => $data) {
+    $expression_fields = $this->expressionFields;
+    reset($expression_fields);
+    foreach ($expression_fields as $field => $data) {
       $update_fields[] = $this->connection->quoteIdentifier($field) . '=' . $data['expression'];
       unset($fields[$field]);
     }
 
     $max_placeholder = 0;
+    reset($fields);
     foreach ($fields as $field => $value) {
       $update_fields[] = $this->connection->quoteIdentifier($field) . '=:db_update_placeholder_' . ($max_placeholder++);
     }

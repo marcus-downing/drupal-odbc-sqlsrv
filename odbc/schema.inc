@@ -35,12 +35,14 @@ class DatabaseSchema_odbc extends DatabaseSchema {
 
       // Don't use {} around information_schema.columns table.
       $result = $this->connection->query("SELECT name AS column_name FROM sys.columns WHERE object_id = OBJECT_ID(:table) AND user_type_id = TYPE_ID(:type)", array(':table' => $table_info['schema'] . '.' . $table_info['table'], ':type' => 'text'));
+      reset($result);
       foreach ($result as $column) {
         $this->additionalColumnInformation[$key]['blobs'][$column->column_name] = true;
       }
 
       // Don't use {} around system tables.
       $result = $this->connection->query('SELECT name column_name FROM sys.identity_columns WHERE object_id = OBJECT_ID(:table)', array(':table' => $table_info['schema'] . '.' . $table_info['table']));
+      reset($result);
       foreach ($result as $column) {
         $this->additionalColumnInformation[$key]['identities'][$column->column_name] = true;
       }
@@ -69,6 +71,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
       $this->connection->query($this->createTableSql($name, $table));
 
       if (isset($table['unique keys']) && is_array($table['unique keys'])) {
+        reset($table['unique_keys']);
         foreach ($table['unique keys'] as $key_name => $key) {
           $this->addUniqueKey($name, $key_name, $key);
         }
@@ -88,6 +91,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
     // with invalid data types (long columns), before we come up with a better
     // solution.
     if (isset($table['indexes']) && is_array($table['indexes'])) {
+      reset($table['indexes']);
       foreach ($table['indexes'] as $key_name => $key) {
         try {
           $this->connection->query($this->createIndexSql($name, $key_name, $key));
@@ -103,16 +107,27 @@ class DatabaseSchema_odbc extends DatabaseSchema {
 
   public function tableExists($table) {
     try {
+      $schema = $this->defaultSchema;
       $table = db_escape_table($table);
-      $this->log('tableExists(%table)', array('%table' => $table), WATCHDOG_DEBUG);
-      $query = $this->connection->prefixTables('SELECT TOP(1) 1 FROM {'.$table.'}');
-      $this->connection->PDOExec($query);
-      $this->log('Table exists: %table', array('%table' => $table), WATCHDOG_INFO);
-      return true;
+      $sql = 'SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = \''.$schema.'\' AND  TABLE_NAME = \''.$table.'\'';
+      
+      $stmt = $this->connection->PDOPrepare($sql);
+      $return = $stmt->execute();
+      $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
+      $exists = count($result) > 0;
+
+      $this->log($exists ? 'Table exists: %dbo.%table' : 'Table does not exist: %dbo.%table', array('%table' => $table, '%dbo' => $schema), WATCHDOG_DEBUG);
+      return $exists;
+
+      // $table = db_escape_table($table);
+      // $this->log('tableExists(%table)', array('%table' => $table), WATCHDOG_DEBUG);
+      // $query = $this->connection->prefixTables('SELECT TOP(1) 1 FROM {'.$table.'}');
+      // $this->connection->PDOExec($query);
+      // $this->log('Table exists: %table', array('%table' => $table), WATCHDOG_INFO);
+      // return true;
     }
     catch (PDOException $e) {
-      $this->log(get_class($e).' while checking for table %table: '.$e->getMessage(), array('%table' => $table), WATCHDOG_DEBUG);
-      $this->log('Table does not exist: %table', array('%table' => $table), WATCHDOG_INFO);
+      $this->log(get_class($e).' while checking for table %table: '.$e->getMessage(), array('%table' => $table), WATCHDOG_ERROR);
       return false;
     }
   }
@@ -129,6 +144,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
    */
   protected function createTableSql($name, $table) {
     $sql_fields = array();
+    reset($tables['fields']);
     foreach ($table['fields'] as $field_name => $field) {
       $sql_fields[] = $this->createFieldSql($name, $field_name, $this->processField($field));
     }
@@ -197,6 +213,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
    */
   protected function createKeySql($fields) {
     $ret = array();
+    reset($fields);
     foreach ($fields as $field) {
       if (is_array($field)) {
         $ret[] = $field[0];
@@ -366,6 +383,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
     // when renaming the table. For some strange reason, indexes are local to
     // a table.
     $objects = $this->connection->query('SELECT name FROM sys.objects WHERE parent_object_id = OBJECT_ID(:table)', array(':table' => $new_table_info['schema'] . '.' . $new_table_info['table']));
+    reset($objects);
     foreach ($objects as $object) {
       if (preg_match('/^' . preg_quote($old_table_info['table']) . '_(.*)$/', $object->name, $matches)) {
         $this->connection->query('EXEC sp_rename :old, :new, :type', array(
@@ -538,6 +556,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
     ));
     $columns = array();
     $valid = false;
+    reset($result);
     foreach ($result as $column) {
       if ($column->column_name == $field) {
         $valid = true;
@@ -566,11 +585,13 @@ class DatabaseSchema_odbc extends DatabaseSchema {
       $this->addPrimaryKey($table, $new_keys['primary key']);
     }
     if (isset($new_keys['unique keys'])) {
+      reset($new_keys['unique keys']);
       foreach ($new_keys['unique keys'] as $name => $fields) {
         $this->addUniqueKey($table, $name, $fields);
       }
     }
     if (isset($new_keys['indexes'])) {
+      reset($new_keys['indexes']);
       foreach ($new_keys['indexes'] as $name => $fields) {
         $this->addIndex($table, $name, $fields);
       }
@@ -605,6 +626,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
       ':table' => $this->connection->prefixTables('{' . $table . '}'),
       ':name' => $field,
     ));
+    reset($indexes);
     foreach ($indexes as $index) {
       $this->connection->query('DROP INDEX [' . $index->name . '] ON [{' . $table . '}]');
     }
@@ -614,6 +636,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
       ':table' => $this->connection->prefixTables('{' . $table . '}'),
       ':name' => $field,
     ));
+    reset($constraints);
     foreach ($constraints as $constraint) {
       $this->connection->query('ALTER TABLE [{' . $table . '}] DROP CONSTRAINT [' . $constraint->name . ']');
     }
@@ -623,6 +646,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
       ':table' => $this->connection->prefixTables('{' . $table . '}'),
       ':name' => $field,
     ));
+    reset($constraints);
     foreach ($constraints as $constraint) {
       $this->connection->query('ALTER TABLE [{' . $table . '}] DROP CONSTRAINT [' . $constraint->name . ']');
     }
@@ -772,6 +796,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
 
     // Then, build a expression based on the columns.
     $column_expression = array();
+    reset($fields);
     foreach ($fields as $field) {
       if (is_array($field)) {
         $column_expression[] = 'SUBSTRING(CAST(' . $field[0] . ' AS '.$intermediateFormat.'),1,' . $field[1] . ')';
