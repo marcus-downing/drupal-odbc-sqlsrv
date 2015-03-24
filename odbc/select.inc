@@ -69,6 +69,8 @@ class SelectQuery_odbc extends SelectQuery {
     }
 
     // if ($this->debug) { echo "<!-- Select query: "; print_r($this->__toString()); echo " -->\n"; }
+
+    $this->connection->preprocessExpressions($this->expressions, $this->group);
     return $this->prepared;
   }
 
@@ -91,9 +93,16 @@ class SelectQuery_odbc extends SelectQuery {
    */
   public function execute() {
     if ($this->debug) $this->queryOptions['DEBUG'] = true;
-    $this->log('execute: %query with args: %args', array('%query' => (string) $this, '%args' => $this->getArguments()), WATCHDOG_INFO);
-    $query = parent::execute();
-    if ($this->debug) $query->debug();
+    try {
+      $queryString = (string) $this;
+      $this->log('execute: %query with args: %args', array('%query' => (string) $queryString, '%args' => $this->getArguments()), WATCHDOG_INFO);
+
+      $query = parent::execute();
+    } catch (Exception $e) {
+      if (ODBC_LOGGING_DEBUG) echo "Exception in SelectQuery_odbc.execute()\n";
+      $this->log('execute: '.get_class($e).' when executing "%sql": '.$e->getMessage(), array('%sql' => $queryString, '%args' => $this->getArguments()), WATCHDOG_ERROR);
+      // debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
+    }
     return $query;
   }
 

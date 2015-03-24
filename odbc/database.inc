@@ -750,6 +750,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     try {
       return parent::query($query, $args, $options);
     } catch (Exception $e) {
+      if (ODBC_LOGGING_DEBUG) echo "Exception in DatabaseConnection_odbc.query()\n";
       $this->log('DatabaseConnection_odbc: query: '.get_class($e).' when executing "%query" with variables %vars: '.$e->getMessage(), array('%query' => $query, '%vars' => $args), WATCHDOG_ERROR);
       throw $e;
     }
@@ -983,6 +984,41 @@ class DatabaseConnection_odbc extends DatabaseConnection {
   }
 
   /**
+   * Internal function: massage aliased expressions to accomodate edge cases that don't quite work the same on SQL Server.
+   */
+  public function preprocessExpressions (&$expressionFields, &$groupBy = null) {
+    $replace_expressions = array();
+    foreach ($expressionFields as $field => $expr) {
+      if ($new_expression = $this->preprocessExpression($expr['expression'])) {
+        $replace_expressions[$expr['expression']] = $new_expression;
+        $expr['expression'] = $new_expression;
+        $expressionFields[$field] = $expr;
+      }
+    }
+
+    if (!is_null($groupBy)) {
+      foreach ($groupBy as $i => $grp) {
+        if (isset($expressionFields[$grp])) {
+          $groupBy[$i] = $expressionFields[$grp]['expression'];
+        } else if (!empty($replace_expressions[$grp])) {
+          $groupBy[$i] = $replace_expressions[$grp];
+        } else if ($new_expression = $this->preprocessExpression($grp)) {
+          $groupBy[$i] = $new_expression;
+        }
+      }
+    }
+  }
+
+  private function preprocessExpression($expression) {
+    if (preg_match('/.* LIKE .*/i', $expression)) {
+      if (!preg_match('/^\case when ', $expression)) {
+        return 'case when '.$expression.' then 1 else 0 end';
+      }
+    }
+    return false;
+  }
+
+  /**
    * Internal function: add range options to a query.
    *
    * This cannot be set protected because it is used in other parts of the
@@ -1035,6 +1071,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
         $this->query('SET IDENTITY_INSERT {sequences} ON; INSERT INTO {sequences} (value) VALUES(:existing); SET IDENTITY_INSERT {sequences} OFF', array(':existing' => $existing));
       }
       catch (Exception $e) {
+        if (ODBC_LOGGING_DEBUG) echo "Exception in DatabaseConnection_odbc.nextId()\n";
         // Doesn't matter if this fails, it just means that this value is already
         // present in the table.
       }

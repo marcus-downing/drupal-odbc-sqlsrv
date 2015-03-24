@@ -78,6 +78,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
       }
     }
     catch (Exception $e) {
+      if (ODBC_LOGGING_DEBUG) echo "Exception in DatabaseSchema_odbc.createTable(1)\n";
       $this->log('createTable: '.get_class($e).' when inserting table %name', array('%name' => $name), WATCHDOG_ERROR);
       $transaction->rollback();
       throw $e;
@@ -97,6 +98,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
           $this->connection->query($this->createIndexSql($name, $key_name, $key));
         }
         catch (Exception $e) {
+          if (ODBC_LOGGING_DEBUG) echo "Exception in DatabaseSchema_odbc.createTable(2)\n";
           // Log the exception but do not rollback the transaction.
           watchdog_exception('database', $e);
         }
@@ -110,7 +112,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
       $schema = $this->defaultSchema;
       $table = db_escape_table($table);
       $sql = 'SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = \''.$schema.'\' AND  TABLE_NAME = \''.$table.'\'';
-      
+
       $stmt = $this->connection->PDOPrepare($sql);
       $return = $stmt->execute();
       $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -127,6 +129,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
       // return true;
     }
     catch (PDOException $e) {
+      if (ODBC_LOGGING_DEBUG) echo "Exception in DatabaseSchema_odbc.tableExists()\n";
       $this->log(get_class($e).' while checking for table %table: '.$e->getMessage(), array('%table' => $table), WATCHDOG_ERROR);
       return false;
     }
@@ -415,6 +418,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
       return true;
     }
     catch (PDOException $e) {
+      if (ODBC_LOGGING_DEBUG) echo "Exception in DatabaseSchema_odbc.fieldExists()\n";
       return false;
     }
   }

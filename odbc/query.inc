@@ -23,6 +23,11 @@ class InsertQuery_odbc extends InsertQuery {
     $this->log('Enabling debug', null, WATCHDOG_DEBUG);
   }
 
+  public function preExecute() {
+    $this->connection->preprocessExpressions($this->expressionFields);
+    return parent::preExecute();
+  }
+
   public function execute() {
     if (!$this->preExecute()) {
       return null;
@@ -65,6 +70,7 @@ class InsertQuery_odbc extends InsertQuery {
         $this->connection->PDOExec($queryString);
         return $this->connection->lastInsertId();
       } catch (Exception $e) {
+        if (ODBC_LOGGING_DEBUG) echo "Exception in InsertQuery_odbc.execute(1)\n";
         $this->log('execute: '.get_class($e).' when executing "%sql": '.$e->getMessage(), array('%sql' => $queryString), WATCHDOG_ERROR);
 
         // This INSERT query failed, rollback everything if we started a transaction earlier.
@@ -87,6 +93,7 @@ class InsertQuery_odbc extends InsertQuery {
         $this->connection->PDOExec($sql);
       }
       catch (Exception $e) {
+        if (ODBC_LOGGING_DEBUG) echo "Exception in InsertQuery_odbc.execute(2)\n";
         $this->log('execute: '.get_class($e).' when executing "%sql": '.$e->getMessage(), array('%sql' => (string) $this), WATCHDOG_ERROR);
 
         // This INSERT query failed, rollback everything if we started a transaction earlier.
@@ -129,6 +136,7 @@ class InsertQuery_odbc extends InsertQuery {
         $inserted = true;
       }
       catch (Exception $e) {
+        if (ODBC_LOGGING_DEBUG) echo "Exception in InsertQuery_odbc.execute(3)\n";
         $this->log('execute: '.get_class($e).' when executing "%sql" with values %values: '.$e->getMessage(), array('%sql' => $queryString, '%values' => $values), WATCHDOG_ERROR);
 
         if (!empty($transaction))
@@ -252,6 +260,12 @@ class UpdateQuery_odbc extends UpdateQuery {
     }
   }
 
+  public function preExecute() {
+    $this->connection->preprocessExpressions($this->expressionFields, $this->group);
+    return parent::preExecute();
+  }
+
+
   public function execute() {
     // Rewrite the query to exclude the non-affected rows.
     // $this->excludeNonAffectedRows();
@@ -334,6 +348,7 @@ class UpdateQuery_odbc extends UpdateQuery {
       $stmt->closeCursor();
       return $nrows;
     } catch (Exception $e) {
+      if (ODBC_LOGGING_DEBUG) echo "Exception in UpdateQuery_odbc.execute()\n";
       $this->log('execute: '.get_class($e).' when executing "%sql" with variables %vars: %error', array('%sql' => (string) $this, '%vars' => $values, '%error' => $e->getMessage()), WATCHDOG_ERROR);
 
       if (!empty($transaction))
@@ -403,6 +418,7 @@ class TruncateQuery_odbc extends TruncateQuery {
     try {
       return parent::execute();
     } catch (Exception $e) {
+      if (ODBC_LOGGING_DEBUG) echo "Exception in TruncateQuery_odbc.execute()\n";
       $this->log('execute: '.get_class($e).' when executing: %error', array('%error' => $e->getMessage()), WATCHDOG_ERROR);
 
       // if (!empty($transaction))
@@ -446,6 +462,7 @@ class MergeQuery_odbc extends MergeQuery {
     try {
       return parent::execute();
     } catch (Exception $e) {
+      if (ODBC_LOGGING_DEBUG) echo "Exception in MergeQuery_odbc.execute";
       $this->log('execute: '.get_class($e).' when executing: %error', array('%error' => $e->getMessage()), WATCHDOG_ERROR);
 
       // if (!empty($transaction))

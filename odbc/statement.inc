@@ -114,6 +114,7 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
 				$this->decodeData();
 			}
 			catch (Exception $e) {
+				if (ODBC_LOGGING_DEBUG) echo "Exception in DatabaseStatement_odbc.execute()\n";
 				$this->log(get_class($e).' when executing "%sql": '.$e->getMessage(), array('%sql' => $this->queryString), WATCHDOG_ERROR);
 				// debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
 				// tolerate this error and return nothing
