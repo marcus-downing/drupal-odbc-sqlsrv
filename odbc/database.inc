@@ -987,6 +987,9 @@ class DatabaseConnection_odbc extends DatabaseConnection {
    * Internal function: massage aliased expressions to accomodate edge cases that don't quite work the same on SQL Server.
    */
   public function preprocessExpressions (&$expressionFields, &$groupBy = null) {
+    if (!is_array($expressionFields)) 
+      return;
+    
     $replace_expressions = array();
     foreach ($expressionFields as $field => $expr) {
       if ($new_expression = $this->preprocessExpression($expr['expression'])) {
