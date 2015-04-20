@@ -828,7 +828,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
 
         $pos = 0;
         $offset = 0;
-        for ($pos = strpos($query, '?'); $pos !== false ; $pos = strpos($query, '?', $offset)) {
+        for ($pos = strpos($query, $key); $pos !== false ; $pos = strpos($query, $key, $offset)) {
           $known_keys[] = $key;
           if (substr($query, $pos, strlen($key)) != $key) $this->log("Mismatching placeholder at offset $index: \"".substr($query, $pos, strlen($key))."\" != \"$key\"", null, WATCHDOG_ERROR);
           $placeholders[$pos] = array($pos, $key, $value);
