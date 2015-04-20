@@ -808,9 +808,11 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     if (range(0, count($args) - 1) === array_keys($args)) {
       //  using ordered arguments,  ?
       //  we can be sure the arguments are in order
+      $pos = 0;
       $offset = 0;
       $currentArg = 0;
-      while ($pos = strpos($query, '?', $offset) && $currentArg < count($args)) {
+      $c_args = count($args);
+      for ($pos = strpos($query, '?'); $pos !== false && $currentArg < $c_args; $pos = strpos($query, '?', $offset)) {
         $placeholders[] = array($pos, '?', $args[$currentArg]);
         $currentArg++;
         $offset = $pos + 1;
@@ -823,8 +825,10 @@ class DatabaseConnection_odbc extends DatabaseConnection {
         if ($key[0] != ':' && $key[0] != '%') {
           $key = ":$key";
         }
+
+        $pos = 0;
         $offset = 0;
-        while ($pos = strpos($query, $key, $offset)) {
+        for ($pos = strpos($query, '?'); $pos !== false ; $pos = strpos($query, '?', $offset)) {
           $known_keys[] = $key;
           if (substr($query, $pos, strlen($key)) != $key) $this->log("Mismatching placeholder at offset $index: \"".substr($query, $pos, strlen($key))."\" != \"$key\"", null, WATCHDOG_ERROR);
           $placeholders[$pos] = array($pos, $key, $value);
