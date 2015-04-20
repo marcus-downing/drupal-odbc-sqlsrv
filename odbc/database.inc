@@ -826,6 +826,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
         $offset = 0;
         while ($pos = strpos($query, $key, $offset)) {
           $known_keys[] = $key;
+          if (substr($query, $pos, strlen($key)) != $key) $this->log("Mismatching placeholder at offset $index: \"".substr($query, $pos, strlen($key))."\" != \"$key\"", null, WATCHDOG_ERROR);
           $placeholders[$pos] = array($pos, $key, $value);
           $offset = $pos + strlen($key);
         }
@@ -843,7 +844,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     reset($placeholders);
     foreach ($placeholders as list($index, $key, $value)) {
       if (is_object($value) || is_array($value)) { $this->log('Skipping obj/array argument: '.print_r($value, true), null, WATCHDOG_NOTICE); continue; }
-      if (substr($query, $index, strlen($key)) != $key) $this->log("Mismatching placeholder at offset $index: \"".substr($query, $index, strlen($key))."\" != \"$key\"", null, WATCHDOG_ERROR);
+      // if (substr($query, $index, strlen($key)) != $key) $this->log("Mismatching placeholder at offset $index: \"".substr($query, $index, strlen($key))."\" != \"$key\"", null, WATCHDOG_ERROR);
       $buf .= substr($query, $offset, $index - $offset);
       $buf .= $value;
       $offset = $index + strlen($key);

@@ -1,4 +1,4 @@
-<?php
+<?phpx34   The server is unavailable.
 
 /**
  * SQL Server-specific implementation of INSERT.
@@ -21,6 +21,7 @@ class InsertQuery_odbc extends InsertQuery {
   public function debug() {
     $this->debug = true;
     $this->log('Enabling debug', null, WATCHDOG_DEBUG);
+    return $this;
   }
 
   public function preExecute() {
@@ -203,6 +204,7 @@ class UpdateQuery_odbc extends UpdateQuery {
   public function debug() {
     $this->debug = true;
     $this->log('Enabling debug');
+    return $this;
   }
 
 
@@ -410,6 +412,7 @@ class TruncateQuery_odbc extends TruncateQuery {
   public function debug() {
     $this->debug = true;
     $this->log('Enabling debug');
+    return $this;
   }
 
   public function execute() {
@@ -454,6 +457,7 @@ class MergeQuery_odbc extends MergeQuery {
   public function debug() {
     $this->debug = true;
     $this->log('Enabling debug');
+    return $this;
   }
 
   public function execute() {

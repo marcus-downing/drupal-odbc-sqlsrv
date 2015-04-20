@@ -15,6 +15,7 @@ class SelectQuery_odbc extends SelectQuery {
   public function debug() {
     $this->debug = true;
     $this->log('Enabling debug');
+    return $this;
   }
 
   /**

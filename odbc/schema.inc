@@ -147,7 +147,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
    */
   protected function createTableSql($name, $table) {
     $sql_fields = array();
-    reset($tables['fields']);
+    reset($table['fields']);
     foreach ($table['fields'] as $field_name => $field) {
       $sql_fields[] = $this->createFieldSql($name, $field_name, $this->processField($field));
     }

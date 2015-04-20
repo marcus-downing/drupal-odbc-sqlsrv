@@ -25,6 +25,7 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
 	public function debug() {
 		$this->debug = true;
 		$this->log('Enabling debug');
+		return $this;
 	}
 
 	protected function getStatement($query, &$args = array()) {
