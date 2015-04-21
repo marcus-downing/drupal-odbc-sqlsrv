@@ -61,6 +61,35 @@ if (!defined('ODBC_USE_TEXT')) define('ODBC_USE_TEXT', true);
 if (!defined('ODBC_ENCODING')) define('ODBC_ENCODING', 'u');
 
 /**
+ * Convert newlines before storing in the database
+ *
+ *  'windows'  = \r\n     CR LF   Windows standard
+ *  'unix'     = \n       LF      Unix standard
+ *
+ * This can be overridden in the connection settings with 'newlines' => (string)
+ */
+if (!defined('ODBC_NEWLINES')) define('ODBC_NEWLINES', 'windows');
+
+/**
+ * Use this method of writing newlines in queries
+ *
+ *  'chars'     =  Character codes eg  `CHAR(13)+CHAR(10)`
+ *  'variable'  =  A predefined variable  `@NEWLINE`
+ *  'token'     =  A temporary token inserted into the string eg  `^NEWLINE^`
+ *  'escape'    =  Unicode escape codes eg  `\x0d\x0a`
+ *
+ * This can be overridden in the connection settings with 'newlines_method' => (string)
+ */
+if (!defined('ODBC_NEWLINE_METHOD')) define('ODBC_NEWLINE_METHOD', 'token');
+
+/**
+ * A temporary token to use when using the token method to write newlines in queries
+ *
+ * This can be overridden in the connection settings with 'newlines_token' => (string)
+ */
+if (!defined('ODBC_NEWLINE_TOKEN')) define('ODBC_NEWLINE_TOKEN', '^NEWLINE^');
+
+/**
  * Deeper debugging. Do not leave this flag switch on!
  *
  * For debugging of your own code, set 'debug' => true flag on the database connection settings.
@@ -384,6 +413,12 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     // The encoding to use for higher characters
     $this->encoding = isset($connection_options['encoding']) ? $connection_options['encoding'] : ODBC_ENCODING;
 
+    // How to encode newlines in query strings
+    $this->newlines = isset($connection_options['newlines']) ? $connection_options['newlines'] : ODBC_NEWLINES;
+    $this->newlineMethod = isset($connection_options['newline_method']) ? $connection_options['newline_method'] : ODBC_NEWLINE_METHOD;
+    $this->newlineToken = isset($connection_options['newline_token']) ? $connection_options['newline_token'] : ODBC_NEWLINE_TOKEN;
+
+    // How to encode unicode
     if ($this->encoding == 'u') {
       $this->encode = 'unicode_x_encode';
       $this->decode = 'unicode_x_decode';
@@ -568,6 +603,8 @@ class DatabaseConnection_odbc extends DatabaseConnection {
   }
 
   public function quote($str, $paramType = PDO::PARAM_STR) {
+    $hasNewlines = false;
+
     if (is_null($str)) return '';
     if (is_array($str)) {
       $this->log('Attempt to use array as string parameter: %arr', array('%arr' => $str), WATCHDOG_NOTICE);
@@ -593,14 +630,37 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     // replace newlines with character codes
     //  \n = CHAR(10)
     //  \r = CHAR(13)
-    $quoted = preg_replace("/\r\n/", "'+CHAR(13)+CHAR(10)+'", $quoted);
-    $quoted = preg_replace("/\n/", "'+CHAR(10)+'", $quoted);
-    $quoted = preg_replace("/\r/", "'+CHAR(13)+'", $quoted);
+
+    if (preg_match("/(\r|\n)/", $quoted)) {
+      $hasNewlines = true;
+
+      switch ($this->newlines) {
+        case 'windows': $newlineValue = 'CHAR(13)+CHAR(10)'; break;
+        case 'unix': $newlineValue = 'CHAR(10)'; break;
+        default: $newlineValue = 'CHAR(13)+CHAR(10)';
+      }
+      bang_syslog('Newline value', $newlineValue);
+
+      switch ($this->newlineMethod) {
+        case 'chars': $newlineReplace = "'+".$newlineValue."+'"; break;
+        // case 'variable': $newlineReplace = "'+@NEWLINE+'"; break;
+        case 'token': $newlineReplace = $this->newlineToken; break;
+        case 'escape': "\x0d\x0a"; break;
+      }
+
+      $quoted = preg_replace("/\r\n/", $newlineReplace, $quoted);
+      $quoted = preg_replace("/\n/", $newlineReplace, $quoted);
+      $quoted = preg_replace("/\r/", $newlineReplace, $quoted);
+    }
 
     if (ODBC_LOGGING_DEBUG) echo "Quoting string: newlines = [[ $quoted ]]\n";
     if (ODBC_HEX_DEBUG) { echo "Quoting string: newlines (md5: ".md5($quoted).")\n"; $this->hex_dump($quoted); }
 
     $quoted = "'".$quoted."'";
+
+    if ($hasNewlines && $this->newlineMethod == 'token') {
+      $quoted = "REPLACE(".$quoted.", '".$this->newlineToken."', ".$newlineValue.")";
+    }
 
     if (ODBC_LOGGING_DEBUG) echo "Quoting string: final    = [[ $quoted ]]\n";
     if (ODBC_HEX_DEBUG) { echo "Quoting string: final (md5: ".md5($quoted).")\n"; $this->hex_dump($quoted); }

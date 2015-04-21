@@ -1,4 +1,4 @@
-<?phpx34   The server is unavailable.
+<?php
 
 /**
  * SQL Server-specific implementation of INSERT.
