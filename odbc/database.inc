@@ -639,7 +639,6 @@ class DatabaseConnection_odbc extends DatabaseConnection {
         case 'unix': $newlineValue = 'CHAR(10)'; break;
         default: $newlineValue = 'CHAR(13)+CHAR(10)';
       }
-      bang_syslog('Newline value', $newlineValue);
 
       switch ($this->newlineMethod) {
         case 'chars': $newlineReplace = "'+".$newlineValue."+'"; break;
