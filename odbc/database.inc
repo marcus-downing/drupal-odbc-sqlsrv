@@ -460,15 +460,6 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     $this->log('Connection string: %dsn', array('%dsn' => $dsn), WATCHDOG_INFO);
 
     parent::__construct($dsn, $connection_options['username'], $connection_options['password'], array(
-      // We ask PDO to perform the placeholders replacement itself because
-      // SQL Server is not able to detect duplicated placeholders in
-      // complex statements.
-      // E.g. This query is going to fail because SQL Server cannot
-      // detect that length1 and length2 are equals.
-      // SELECT SUBSTRING(title, 1, :length1)
-      // FROM node
-      // GROUP BY SUBSTRING(title, 1, :length2);
-      // This is only going to work in PDO 3 but doesn't hurt in PDO 2.
       PDO::ATTR_EMULATE_PREPARES => true,
     ));
 
@@ -905,7 +896,8 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     $buf = "";
     $offset = 0;
     reset($placeholders);
-    foreach ($placeholders as list($index, $key, $value)) {
+    foreach ($placeholders as $placeholder) {
+      list($index, $key, $value) = $placeholder;
       if (is_object($value) || is_array($value)) { $this->log('Skipping obj/array argument: '.print_r($value, true), null, WATCHDOG_NOTICE); continue; }
       // if (substr($query, $index, strlen($key)) != $key) $this->log("Mismatching placeholder at offset $index: \"".substr($query, $index, strlen($key))."\" != \"$key\"", null, WATCHDOG_ERROR);
       $buf .= substr($query, $offset, $index - $offset);
@@ -1160,7 +1152,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
    */
   public function escapeTable($table) {
     // Rescue the # prefix from the escaping.
-    return ($table[0] == '#' ? '#' : '') . preg_replace('/[^A-Za-z0-9_.]+/', '', $table);
+    return ($table[0] == '#' ? ($table[1] == '#' ? '##' : '#') : '') . preg_replace('/[^A-Za-z0-9_.]+/', '', $table);
   }
 }
 
