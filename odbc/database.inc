@@ -1017,6 +1017,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
       'GREATEST',
       'CONCAT',
       'IF',
+      'UNIX_TIMESTAMP',
     );
     $schema = $this->schema()->defaultSchema;
     reset($functions);
@@ -1027,6 +1028,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     $replacements = array(
       'LENGTH' => 'LEN',
       'POW' => 'POWER',
+      'NOW' => 'GETUTCDATE',
     );
     reset($replacements);
     foreach ($replacements as $function => $replacement) {
