@@ -326,8 +326,10 @@ class DatabaseConnection_odbc extends DatabaseConnection {
    * Internal method to artificially load the syslog module before the database is initialised
    */
   private function loadSyslog() {
-    if (!function_exists('bang_syslog')) {
+    global $odbc_sqlsrv_syslog;
+    if (!function_exists('bang_syslog') && !$odbc_sqlsrv_syslog) {
       if (ODBC_LOGGING_DEBUG) echo "loading syslog\n";
+      $odbc_sqlsrv_syslog = true;
 
       if (!function_exists('drupal_system_listing')) {
         require_once DRUPAL_ROOT . '/includes/common.inc';
