@@ -25,7 +25,7 @@ function unicode_x_decode($str) {
     $codes = str_split($match[0], 4);
     $hex = '';
     foreach ($codes as $code) {
-      $hex .= substr($c, 2);
+      $hex .= substr($code, 2);
     }
     // $codes = array_map(function ($c) {
     //   return substr($c, 2);
