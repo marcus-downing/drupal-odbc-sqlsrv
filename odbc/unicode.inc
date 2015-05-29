@@ -1,6 +1,9 @@
 <?php
 
 function unicode_x_encode($str) {
+  if (!preg_match('/[^ -~]/', $str))
+    return $str;
+
   $chars = preg_split('//u', $str, -1, PREG_SPLIT_NO_EMPTY);
   $encoded = '';
   reset($chars);
