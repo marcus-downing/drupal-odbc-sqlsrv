@@ -95,6 +95,10 @@ class SelectQuery_odbc extends SelectQuery {
   public function execute() {
     if ($this->debug) $this->queryOptions['DEBUG'] = true;
     try {
+      if (!$this->preExecute()) {
+        return NULL;
+      }
+
       $queryString = (string) $this;
       $this->log('execute: %query with args: %args', array('%query' => (string) $queryString, '%args' => $this->getArguments()), WATCHDOG_INFO);
 
