@@ -28,7 +28,7 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
 		return $this;
 	}
 
-	protected function getStatement($query, &$args = array()) {
+	private function _getStatement($query, &$args = array()) {
 		$this->log('getStatement(%query)', array('%query' => $query), WATCHDOG_DEBUG);
 		return $this->dbh->PDOPrepare($query);
 	}
@@ -60,9 +60,7 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
 		return $nrows;
 	}
 
-	public function execute($args = array(), $options = array()) {
-		$this->log('execute()', null, WATCHDOG_DEBUG);
-
+	private function _setFetchMode($options) {
 		if (isset($options['fetch'])) {
 			if (is_string($options['fetch'])) {
 				// Default to an object. Note: db fields will be added to the object
@@ -74,15 +72,10 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
 				$this->setFetchMode($options['fetch']);
 			}
 		}
+	}
 
-		$logger = $this->dbh->getLogger();
-		if (!empty($logger)) {
-			$query_start = microtime(true);
-		}
-
-		// Prepare the query.
+	private function _prepareQueryString($args) {
 		$queryString = $this->dbh->prefixTables($this->queryString);
-
 		$queryString = $this->dbh->replacePlaceholders($queryString, $args);
 
 		if (empty($args))
@@ -90,26 +83,16 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
 		else
 			$this->log('execute: Preparing query: %query with args: %args', array('%query' => $this->queryString, '%args' => $args), WATCHDOG_DEBUG);
 
-		$statement = $this->getStatement($queryString);
-		
-		if (!$statement) {
-			$this->log('execute: No statement for query "%sql"', array('%sql' => $this->queryString), WATCHDOG_ERROR);
-			$this->throwPDOException();
-		}
-		$return = $statement->execute();
-		if (!$return) {
-			$this->log('execute: Failed to execute query "%sql"', array('%sql' => $this->queryString), WATCHDOG_ERROR);
-			$this->throwPDOException();
-		}
+		return $queryString;
+	}
 
-		// Fetch all the data from the reply, in order to release any lock
-		// as soon as possible.
+	private function _fetchResults($statement) {
 		$this->rowCount = $statement->rowCount();
 
 		if ($this->isSelect()) {
 			try {
 				$this->data = $statement->fetchAll(PDO::FETCH_ASSOC);
-				$this->log('execute: Fetched %nrows rows', array('%nrows' => count($this->data)), WATCHDOG_DEBUG);
+				// $this->log('execute: Fetched %nrows rows', array('%nrows' => count($this->data)), WATCHDOG_DEBUG);
 
 				//  decode strings if necessary
 				$this->decodeData();
@@ -125,16 +108,43 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
 
 		$this->inferColumnNames();
 
-		if (!empty($logger)) {
-			$query_end = microtime(true);
-			$logger->log($this, $args, $query_end - $query_start);
-		}
-
 		if (isset($options['sqlsrv_drop_columns']))
 			$this->dropColumns($options['sqlsrv_drop_columns']);
+	}
+
+	public function execute($args = array(), $options = array()) {
+		// $this->log('execute()', null, WATCHDOG_DEBUG);
+
+		$this->_setFetchMode($options);
+
+		// $logger = $this->dbh->getLogger();
+		// if (!empty($logger)) {
+		// 	$query_start = microtime(true);
+		// }
+
+		$queryString = $this->_prepareQueryString($args);
+		$statement = $this->_getStatement($queryString);
+		
+		if ($statement === false) {
+			$this->log('execute: No statement for query "%sql"', array('%sql' => $this->queryString), WATCHDOG_ERROR);
+			$this->throwPDOException();
+		}
+		$return = $statement->execute();
+		if ($return === false) {
+			$this->log('execute: Failed to execute query "%sql"', array('%sql' => $this->queryString), WATCHDOG_ERROR);
+			$this->throwPDOException();
+		}
+
+		// Fetch all the data from the reply, in order to release any lock as soon as possible.
+		$this->_fetchResults($statement);
+
+		// if (!empty($logger)) {
+		// 	$query_end = microtime(true);
+		// 	// $logger->log($this, $args, $query_end - $query_start);
+		// }
 
 		// Destroy the statement as soon as possible.
-		$this->log('close', null, WATCHDOG_DEBUG);
+		// $this->log('close', null, WATCHDOG_DEBUG);
 		$statement->closeCursor();
 		unset($statement);
 
