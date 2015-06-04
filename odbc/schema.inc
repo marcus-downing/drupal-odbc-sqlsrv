@@ -115,18 +115,11 @@ class DatabaseSchema_odbc extends DatabaseSchema {
 
       $stmt = $this->connection->PDOPrepare($sql);
       $return = $stmt->execute();
-      $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
-      $exists = count($result) > 0;
+      $result = $stmt->fetch(PDO::FETCH_ASSOC);
+      $exists = $result !== false;
 
-      $this->log($exists ? 'Table exists: %dbo.%table' : 'Table does not exist: %dbo.%table', array('%table' => $table, '%dbo' => $schema), WATCHDOG_DEBUG);
+      // $this->log($exists ? 'Table exists: %dbo.%table' : 'Table does not exist: %dbo.%table', array('%table' => $table, '%dbo' => $schema), WATCHDOG_DEBUG);
       return $exists;
-
-      // $table = db_escape_table($table);
-      // $this->log('tableExists(%table)', array('%table' => $table), WATCHDOG_DEBUG);
-      // $query = $this->connection->prefixTables('SELECT TOP(1) 1 FROM {'.$table.'}');
-      // $this->connection->PDOExec($query);
-      // $this->log('Table exists: %table', array('%table' => $table), WATCHDOG_INFO);
-      // return true;
     }
     catch (PDOException $e) {
       if (ODBC_LOGGING_DEBUG) echo "Exception in DatabaseSchema_odbc.tableExists()\n";
