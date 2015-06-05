@@ -623,7 +623,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     // replace newlines with character codes
     //  \n = CHAR(10)
     //  \r = CHAR(13)
-
+/*
     if (preg_match("/(\r|\n)/", $quoted)) {
       $hasNewlines = true;
 
@@ -644,16 +644,16 @@ class DatabaseConnection_odbc extends DatabaseConnection {
       $quoted = preg_replace("/\n/", $newlineReplace, $quoted);
       $quoted = preg_replace("/\r/", $newlineReplace, $quoted);
     }
-
+*/
     if (ODBC_LOGGING_DEBUG) echo "Quoting string: newlines = [[ $quoted ]]\n";
     if (ODBC_HEX_DEBUG) { echo "Quoting string: newlines (md5: ".md5($quoted).")\n"; $this->hex_dump($quoted); }
 
     $quoted = "'".$quoted."'";
-
+/*
     if ($hasNewlines && $this->newlineMethod == 'token') {
       $quoted = "REPLACE(".$quoted.", '".$this->newlineToken."', ".$newlineValue.")";
     }
-
+*/
     if (ODBC_LOGGING_DEBUG) echo "Quoting string: final    = [[ $quoted ]]\n";
     if (ODBC_HEX_DEBUG) { echo "Quoting string: final (md5: ".md5($quoted).")\n"; $this->hex_dump($quoted); }
     return $quoted;

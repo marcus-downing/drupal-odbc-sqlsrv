@@ -10,7 +10,7 @@ function unicode_x_encode($str) {
   foreach ($chars as $i => $ch) {
     $pak = unpack('H*', $ch);
     $codes = str_split($pak[1], 2);
-    if (count($codes) == 1 && ($ch != '\\' || $chars[$i+1] == '_') && $ch != "\000") {
+    if (count($codes) == 1 && ($ch != '\\' || $chars[$i+1] == '_') && $ch != "\000" && $ch != "\r" && $ch != "\n") {
       $encoded .= $ch;
     } else {
       reset($codes);
