@@ -112,6 +112,9 @@ class SelectQuery_odbc extends SelectQuery {
   }
 
   public function __toString() {
+    // Make sure this is done before the SQL is generated
+    $this->preExecute();
+
     // For convenience, we compile the query ourselves if the caller forgot
     // to do it. This allows constructs like "(string) $query" to work. When
     // the query will be executed, it will be recompiled using the proper
