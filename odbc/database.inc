@@ -598,7 +598,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
   public function quote($str, $paramType = PDO::PARAM_STR) {
     $hasNewlines = false;
 
-    if (is_null($str)) return '';
+    if (is_null($str)) return 'NULL';
     if (is_array($str)) {
       $this->log('Attempt to use array as string parameter: %arr', array('%arr' => $str), WATCHDOG_NOTICE);
       return "''";
@@ -614,46 +614,9 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     $quoted = $this->encode($quoted);
     if (ODBC_LOGGING_DEBUG) echo "Quoting string: encoded  = [[ $quoted ]]\n";
     if (ODBC_HEX_DEBUG) { echo "Quoting string: encoded (md5: ".md5($quoted).")\n"; $this->hex_dump($quoted); }
-    // $quoted = str_replace(':', '\:', $quoted);
-    // $quoted = str_replace('?', '\?', $quoted);
+
     $quoted = str_replace("'", "''", $quoted);
-    if (ODBC_LOGGING_DEBUG) echo "Quoting string: escaped  = [[ $quoted ]]\n";
-    if (ODBC_HEX_DEBUG) { echo "Quoting string: escaped (md5: ".md5($quoted).")\n"; $this->hex_dump($quoted); }
-
-    // replace newlines with character codes
-    //  \n = CHAR(10)
-    //  \r = CHAR(13)
-/*
-    if (preg_match("/(\r|\n)/", $quoted)) {
-      $hasNewlines = true;
-
-      switch ($this->newlines) {
-        case 'windows': $newlineValue = 'CHAR(13)+CHAR(10)'; break;
-        case 'unix': $newlineValue = 'CHAR(10)'; break;
-        default: $newlineValue = 'CHAR(13)+CHAR(10)';
-      }
-
-      switch ($this->newlineMethod) {
-        case 'chars': $newlineReplace = "'+".$newlineValue."+'"; break;
-        // case 'variable': $newlineReplace = "'+@NEWLINE+'"; break;
-        case 'token': $newlineReplace = $this->newlineToken; break;
-        case 'escape': "\x0d\x0a"; break;
-      }
-
-      $quoted = preg_replace("/\r\n/", $newlineReplace, $quoted);
-      $quoted = preg_replace("/\n/", $newlineReplace, $quoted);
-      $quoted = preg_replace("/\r/", $newlineReplace, $quoted);
-    }
-*/
-    if (ODBC_LOGGING_DEBUG) echo "Quoting string: newlines = [[ $quoted ]]\n";
-    if (ODBC_HEX_DEBUG) { echo "Quoting string: newlines (md5: ".md5($quoted).")\n"; $this->hex_dump($quoted); }
-
     $quoted = "'".$quoted."'";
-/*
-    if ($hasNewlines && $this->newlineMethod == 'token') {
-      $quoted = "REPLACE(".$quoted.", '".$this->newlineToken."', ".$newlineValue.")";
-    }
-*/
     if (ODBC_LOGGING_DEBUG) echo "Quoting string: final    = [[ $quoted ]]\n";
     if (ODBC_HEX_DEBUG) { echo "Quoting string: final (md5: ".md5($quoted).")\n"; $this->hex_dump($quoted); }
     return $quoted;
@@ -668,98 +631,6 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     $fn = $this->decode;
     return $fn($str);
   }
-
-/*
-  public function encode($str) {
-    if (!is_string($str))
-      return $str;
-
-    switch ($this->encoding) {
-      case 'html':
-        $encoded = htmlentities($str, ENT_NOQUOTES | ENT_IGNORE | ENT_HTML401, 'UTF-8', false);
-        return $encoded;
-
-      case 'u':
-        $encoded = unicode_x_encode($str);
-        return $encoded;
-
-      case 'url':
-        $encoded = urlencode($str);
-        return $encoded;
-
-      case 'quoted-printable':
-        $encoded = quoted_printable_encode($str);
-        //  correct newlines back, we have no real need to split them
-        $encoded = str_replace("=\r\n", "", $encoded);
-        return $encoded;
-
-      default:
-        return $str;
-    }
-  }
-
-  public function decode($str) {
-    if (!is_string($str))
-      return $str;
-
-    try {
-      // look for quoted-printable
-      // if (preg_match('/=[0-9A-F]{2}/', $str)) {
-      //   $decoded = quoted_printable_decode($str);
-      //   if (!is_string($decoded))
-      //     return $str;
-      //   if (empty($decoded) && !empty($str))
-      //     return $str;
-
-      //   // special case to make sure we're not breaking serialised data
-      //   if (preg_match('/(a:[0-9]+:{|s:[0-9]+:")/', $str)) {
-      //     $unserialized = unserialize($decoded);
-      //     if ($unserialized == false) {
-      //       $unserialized = unserialize($str);
-      //       if ($unserialized !== false)
-      //         return $str;
-      //     }
-      //   }
-
-      //   return $decoded;
-      // }
-
-      // look for unicode escaping
-      // if (preg_match('/\\u[0-9A-F]{4}/', $str)) {
-      //   $decoded = unicode_decode($str);
-      //   return $str;
-      // }
-
-      return unicode_x_decode($str);
-
-      // look for URL encoding
-      // if (preg_match('/%[0-9A-F]{2}/', $str)) {
-      //   $decoded = urldecode($str);
-      //   return $str;
-      // }
-
-      // decode HTML entities
-      // $decoded = html_entity_decode($str, ENT_NOQUOTES | ENT_HTML401, 'UTF-8');
-
-      // // special case to make sure we're not breaking serialised data
-      // if (preg_match('/(a:[0-9]+:{|s:[0-9]+:")/', $str)) {
-      //   $unserialized = unserialize($decoded);
-      //   if ($unserialized == false) {
-      //     $unserialized = unserialize($str);
-      //     if ($unserialized !== false)
-      //       return $str;
-      //   }
-      // }
-      // return $decoded;
-
-      // return $str;
-
-    } catch (Exception $e) {
-      $this->log(get_class($e).' decoding string: "%str"', array('%str' => $str), WATCHDOG_ERROR);
-      return $str;
-    }
-  }
-*/
 
   public function quoteIdentifier($identifier) {
     return '[' . $identifier .']';
@@ -777,7 +648,6 @@ class DatabaseConnection_odbc extends DatabaseConnection {
         $out .= $this->quoteIdentifier($part);
       }
       return $out;
-      // return implode('.', array_map(array($this, 'quoteIdentifier'), explode('.', preg_replace('/[^A-Za-z0-9_.]+/', '', $field))));
     }
     else {
       return '';
@@ -791,7 +661,6 @@ class DatabaseConnection_odbc extends DatabaseConnection {
       $out[]= $this->quoteIdentifier($ident);
     }
     return $out;
-    // return array_map(array($this, 'quoteIdentifier'), $identifiers);;
   }
 
   /**
