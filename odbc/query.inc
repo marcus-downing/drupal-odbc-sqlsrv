@@ -332,7 +332,9 @@ class UpdateQuery_odbc extends UpdateQuery {
       reset($expression_fields);
       foreach ($expression_fields as $field => $data) {
         // $this->log('execute: Adding expression values', $data['arguments'], WATCHDOG_DEBUG);
-        $expression_values = array_merge($data['arguments'], $expression_values);
+        if (is_array($data['arguments'])) {
+          $expression_values = array_merge($data['arguments'], $expression_values);
+        }
       }
       if ($intersection = array_intersect_key($values, $expression_values))
         $this->log('execute: Conflict between values and expression values! %intersection', array('%intersection' => $intersection), WATCHDOG_DEBUG);
