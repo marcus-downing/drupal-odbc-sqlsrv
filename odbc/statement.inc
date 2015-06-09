@@ -28,7 +28,7 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
 		return $this;
 	}
 
-	private function _getStatement($query, &$args = array()) {
+	private function _getStatement($query) {
 		$this->log('getStatement(%query)', array('%query' => $query), WATCHDOG_DEBUG);
 		return $this->dbh->PDOPrepare($query);
 	}
@@ -74,7 +74,7 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
 		}
 	}
 
-	private function _prepareQueryString($args) {
+	private function _prepareQueryString(&$args) {
 		$queryString = $this->dbh->prefixTables($this->queryString);
 		$queryString = $this->dbh->replacePlaceholders($queryString, $args);
 
@@ -86,7 +86,7 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
 		return $queryString;
 	}
 
-	private function _fetchResults($statement) {
+	private function _fetchResults(&$statement) {
 		$this->rowCount = $statement->rowCount();
 
 		if ($this->isSelect()) {
@@ -112,24 +112,14 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
 			$this->dropColumns($options['sqlsrv_drop_columns']);
 	}
 
-	public function execute($args = array(), $options = array()) {
-		// $this->log('execute()', null, WATCHDOG_DEBUG);
-
-		$this->_setFetchMode($options);
-
-		// $logger = $this->dbh->getLogger();
-		// if (!empty($logger)) {
-		// 	$query_start = microtime(true);
-		// }
-
-		$queryString = $this->_prepareQueryString($args);
+	private function _execute($queryString) {
 		$statement = $this->_getStatement($queryString);
-		
+
 		if ($statement === false) {
 			$this->log('execute: No statement for query "%sql"', array('%sql' => $this->queryString), WATCHDOG_ERROR);
 			$this->throwPDOException();
 		}
-		$return = $statement->execute();
+		$return = (bool) $statement->execute();
 		if ($return === false) {
 			$this->log('execute: Failed to execute query "%sql"', array('%sql' => $this->queryString), WATCHDOG_ERROR);
 			$this->throwPDOException();
@@ -137,19 +127,21 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
 
 		// Fetch all the data from the reply, in order to release any lock as soon as possible.
 		$this->_fetchResults($statement);
-
-		// if (!empty($logger)) {
-		// 	$query_end = microtime(true);
-		// 	// $logger->log($this, $args, $query_end - $query_start);
-		// }
-
-		// Destroy the statement as soon as possible.
-		// $this->log('close', null, WATCHDOG_DEBUG);
 		$statement->closeCursor();
-		unset($statement);
 
 		// Initialize the first row in $this->currentRow.
 		$this->next();
+		return $return;
+	}
+
+	public function execute($args = array(), $options = array()) {
+		// $this->log('execute()', null, WATCHDOG_DEBUG);
+
+		$this->_setFetchMode($options);
+		$queryString = $this->_prepareQueryString($args);
+		
+		$return = $this->_execute($queryString);
+		// unset($statement);
 
 		return $return;
 	}
