@@ -41,6 +41,12 @@ if (!defined('ODBC_FORGIVING')) define('ODBC_FORGIVING', true);
 if (!defined('ODBC_USE_TRANSACTIONS')) define('ODBC_USE_TRANSACTIONS', false);
 
 /**
+ * Whether to falsify the behaviour of temporary tables
+ *
+ */
+if (!defined('ODBC_FAUX_TEMPORARY_TABLES')) define('ODBC_FAUX_TEMPORARY_TABLES', false);
+
+/**
  * Use the deprecated but more compatible `text` data type in place of `varchar` and `varbinary`
  *
  * This can be overridden in the connection setttings with 'use_text' => (boolean)
@@ -111,6 +117,8 @@ class DatabaseConnection_odbc extends DatabaseConnection {
   private $debug = false;
   private $log_threshold = WATCHDOG_WARNING;
   private $logto = false;
+
+  private $temporaryTables = array();
 
   // private $cursorDepth = 0;
   // private $watchdogQueue = array();
@@ -375,11 +383,6 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     return false;
   }
 
-  /**
-   * Override of DatabaseConnection::databaseType().
-   *
-   * @status complete
-   */
   public function __construct(array $connection_options = array()) {
     // Whether to use dblog / watchdog / syslog / drush to record debug information
     $this->debug = isset($connection_options['debug']) && (boolean) $connection_options['debug'];
@@ -408,6 +411,9 @@ class DatabaseConnection_odbc extends DatabaseConnection {
 
     // Whether to use transactions
     $this->transactionSupport = isset($connection_options['transactions']) ? (boolean) $connection_options['transactions'] : ODBC_USE_TRANSACTIONS;
+
+    // Whether to falsify the behaviour of temporary tables
+    $this->fauxTemporaryTables = isset($connection_options['faux_temporary_tables']) ? (boolean) $connection_options['faux_temporary_tables'] : ODBC_FAUX_TEMPORARY_TABLES;
 
     // Whether to use `text` fields instead of varchar(max) and varbinary(max)
     $this->useTextFields = isset($connection_options['use_text']) ? (boolean) $connection_options['use_text'] : ODBC_USE_TEXT;
@@ -475,7 +481,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     // If running under Drush, fiddle with the connection settings to make sure 
     //  `drush_valid_db_credentials` builds the right query string.
     // (but first, make sure it really is the default db)
-    if (function_exists('drush_get_context')) {
+    if (drupal_is_cli()) {
       $conn = &$GLOBALS['databases']['default']['default'];
       if (isset($conn) && isset($conn['driver']) && $conn['driver'] == 'odbc' && isset($conn['odbc_driver']) && !preg_match('/;driver=/', $conn['database'])) {
         $driver = $conn['odbc_driver'];
@@ -486,6 +492,18 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     }
 
     $this->log('DatabaseStatement_odbc: init', null, WATCHDOG_DEBUG);
+  }
+
+  /**
+   * Clean up faux temporary tables
+   */
+  public function __destruct() {
+    $tables = $this->temporaryTables;
+    $tables = array_values(array_unique(array_filter($tables)));
+
+    foreach ($tables as $table) {
+      $this->query('DROP TABLE '.$table);
+    }
   }
 
   /**
@@ -693,17 +711,45 @@ class DatabaseConnection_odbc extends DatabaseConnection {
   public function queryTemporary($query, array $args = array(), array $options = array()) {
     // Generate a new temporary table name and protect it from prefixing.
     // SQL Server requires that temporary tables to be non-qualified.
-    $tablename = '#' . $this->generateTemporaryTableName();
+    if ($this->fauxTemporaryTables) {
+      $tablename = $this->generateTemporaryTableName();
+      $this->temporaryTables[] = $tablename;
+    } else {
+      $tablename = '##'.$this->generateTemporaryTableName();
+    }
+
     $prefixes = $this->prefixes;
     $prefixes[$tablename] = '';
     $this->setPrefix($prefixes);
 
     // Replace SELECT xxx FROM table by SELECT xxx INTO #table FROM table.
-    $query = preg_replace('/^SELECT(.*?)FROM/i', 'SELECT$1 INTO ' . $tablename . ' FROM', $query);
+    $query = preg_replace('/^SELECT(.*?)FROM/is', 'SELECT$1 INTO ' . $tablename . ' FROM', $query);
 
     $this->query($query, $args, $options);
     return $tablename;
   }
+
+  /**
+   * Generates a temporary table name.
+   *
+   * @return
+   *   A table name.
+   */
+  protected function generateTemporaryTableName() {
+    return "db_temporary_".$this->requestId().'_'.$this->temporaryNameIndex++;
+  }
+
+  public function requestId() {
+    global $odbc_request_id, $bang_syslog__id;
+    if (!isset($odbc_request_id)) {
+      if (isset($bang_syslog__id))
+        $odbc_request_id = $bang_syslog__id.'_'.substr(md5(rand()), 6, 6);
+      else
+        $odbc_request_id = substr(md5(rand()), 6, 6);
+    }
+    return $odbc_request_id;
+  }
+
 
   /**
    * Internal function: do a manual placeholder replacement for a query.
