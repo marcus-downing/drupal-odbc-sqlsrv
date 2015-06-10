@@ -943,7 +943,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
 
   private function preprocessExpression($expression) {
     if (preg_match('/.* LIKE .*/i', $expression)) {
-      if (!preg_match('/^\case when ', $expression)) {
+      if (!preg_match('/^\case when /', $expression)) {
         return 'case when '.$expression.' then 1 else 0 end';
       }
     }
