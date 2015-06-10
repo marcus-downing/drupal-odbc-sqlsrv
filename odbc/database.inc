@@ -349,30 +349,35 @@ class DatabaseConnection_odbc extends DatabaseConnection {
       if (!isset($_SERVER['SERVER_NAME'])) $_SERVER['SERVER_NAME'] = '';
 
       //  first load WordPress
-      if (ODBC_LOGGING_DEBUG) echo "looking for WordPress module\n";
-      $matches = drupal_system_listing('/^wordpress\.module$/', 'modules', 'name', 0);
-      reset($matches);
-      foreach ($matches as $file) {
-        $path = realpath($file->uri);
-        if (ODBC_LOGGING_DEBUG) echo "$path\n";
-        if (file_exists($path)) {
-          include_once($path);
-          break;
-        }
-      }
+      $this->loadModule('wordpress');
+      $this->loadModule('bang_syslog');
 
-      //  then Syslog
-      if (ODBC_LOGGING_DEBUG) echo "looking for Syslog module\n";
-      $matches = drupal_system_listing('/^bang_syslog\.module$/', 'modules', 'name', 0);
-      reset($matches);
-      foreach ($matches as $file) {
-        $path = realpath($file->uri);
-        if (ODBC_LOGGING_DEBUG) echo "$path\n";
-        if (file_exists($path)) {
-          include_once($path);
-          break;
-        }
-      }
+      // if (ODBC_LOGGING_DEBUG) echo "looking for WordPress module\n";
+      // $likely_wp = 
+      // if (file_exists(realp))
+      // $matches = drupal_system_listing('/^wordpress\.module$/', 'modules', 'name', 0);
+      // reset($matches);
+      // foreach ($matches as $file) {
+      //   $path = realpath($file->uri);
+      //   if (ODBC_LOGGING_DEBUG) echo "$path\n";
+      //   if (file_exists($path)) {
+      //     include_once($path);
+      //     break;
+      //   }
+      // }
+
+      // //  then Syslog
+      // if (ODBC_LOGGING_DEBUG) echo "looking for Syslog module\n";
+      // $matches = drupal_system_listing('/^bang_syslog\.module$/', 'modules', 'name', 0);
+      // reset($matches);
+      // foreach ($matches as $file) {
+      //   $path = realpath($file->uri);
+      //   if (ODBC_LOGGING_DEBUG) echo "$path\n";
+      //   if (file_exists($path)) {
+      //     include_once($path);
+      //     break;
+      //   }
+      // }
     }
 
     if (ODBC_LOGGING_DEBUG) echo "syslog init\n";
@@ -381,6 +386,33 @@ class DatabaseConnection_odbc extends DatabaseConnection {
       return true;
     }
     return false;
+  }
+
+  private function loadModule($module) {
+    $likely = array(
+      'sites/all/modules/contrib/'.$module.'/'.$module.'.module'
+    );
+    foreach ($likely as $file) {
+      $path = realpath($file);
+      if (ODBC_LOGGING_DEBUG) echo "$path\n";
+      if (file_exists($path)) {
+        include_once($path);
+        return;
+      }
+    }
+
+
+    if (ODBC_LOGGING_DEBUG) echo "Searching for $module module\n";
+    $matches = drupal_system_listing('/^'.$module.'\.module$/', 'modules', 'name', 0);
+    reset($matches);
+    foreach ($matches as $file) {
+      $path = realpath($file->uri);
+      if (ODBC_LOGGING_DEBUG) echo "$path\n";
+      if (file_exists($path)) {
+        include_once($path);
+        return;
+      }
+    }
   }
 
   public function __construct(array $connection_options = array()) {
@@ -857,54 +889,6 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     }
     return $out;
   }
-
-  /*
-  public function replacePlaceholders($query, array $args = array()) {
-    // Check if $args is a simple numeric array.
-    if (range(0, count($args) - 1) === array_keys($args)) {
-      // In that case, we have unnamed placeholders.
-      $count = 0;
-      $new_args = array();
-      foreach ($args as $value) {
-        if (is_float($value)) {
-          // Force the conversion to float so as not to loose precision
-          // in the automatic cast.
-          $value = sprintf('%F', $value);
-        }
-        elseif (!is_int($value)) {
-          $value = $this->quote($value);
-        }
-        $query = substr_replace($query, $value, strpos($query, '?'), 1);
-      }
-      $args = $new_args;
-    }
-    else {
-      // Else, this is using named placeholders.
-      foreach ($args as $placeholder => $value) {
-        if (is_float($value)) {
-          // Force the conversion to float so as not to loose precision
-          // in the automatic cast.
-          $value = sprintf('%F', $value);
-        }
-        elseif (!is_int($value)) {
-          $value = $this->quote((string) $value);
-        }
-
-        // PDO allows placeholders to not be prefixed by a colon. See
-        // http://marc.info/?l=php-internals&m=111234321827149&w=2 for
-        // more.
-        if ($placeholder[0] != ':') {
-          $placeholder = ":$placeholder";
-        }
-        // When replacing the placeholders, make sure we search for the
-        // exact placeholder. For example, if searching for
-        // ':db_placeholder_1', do not replace ':db_placeholder_11'.
-        $query = preg_replace('/' . preg_quote($placeholder) . '\b/', $value, $query);
-      }
-    }
-    
-    return $query;
-  }*/
 
   /**
    * Internal function: massage a query to make it compliant with SQL Server.
