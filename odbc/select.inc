@@ -185,7 +185,8 @@ class SelectQuery_odbc extends SelectQuery {
 
     // GROUP BY
     if ($this->group) {
-      $query .= "\nGROUP BY " . implode(', ', $this->group);
+      $group = array_filter($this->group, array($this, 'validGroupBy'));
+      $query .= "\nGROUP BY " . implode(', ', $group);
     }
 
     // HAVING
@@ -222,6 +223,20 @@ class SelectQuery_odbc extends SelectQuery {
 
     $this->log('Query string: %query', array('%query' => $query), WATCHDOG_DEBUG);
     return $query;
+  }
+
+  /**
+   * Work around an annoying feature of SQL Server where it refuses to group by literal values
+   * http://www.sql-server-helper.com/error-messages/msg-164.aspx
+   */
+  protected function validGroupBy($group) {
+    if (is_numeric($group)) return false;
+    if (is_string($group)) {
+      $group = trim($group);
+      $ch0 = substr($group, 0, 1);
+      if ($ch0 == "'") return false;
+    }
+    return true;
   }
 
   /**
