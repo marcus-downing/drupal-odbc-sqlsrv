@@ -989,14 +989,18 @@ class DatabaseConnection_odbc extends DatabaseConnection {
    * @status tested
    */
   public function addRangeToQuery($query, $from, $count) {
+    if (preg_match('/TOP\(/', $query)) {
+      return $query;
+    }
+
     if ($from == 0) {
       // Easy case: just use a TOP query if we don't have to skip any rows.
-      $query = preg_replace('/^\s*SELECT(\s*DISTINCT)?/Dsi', 'SELECT$1 TOP(' . $count . ')', $query);
+      $query = preg_replace('/^\s*SELECT(\s*DISTINCT)?/Dsi', 'SELECT$1 TOP(' . $count . ') WITH TIES ', $query);
     }
     else {
       // More complex case: use a TOP query to retrieve $from + $count rows, and
       // filter out the first $from rows using a window function.
-      $query = preg_replace('/^\s*SELECT(\s*DISTINCT)?/Dsi', 'SELECT$1 TOP(' . ($from + $count) . ') ', $query);
+      $query = preg_replace('/^\s*SELECT(\s*DISTINCT)?/Dsi', 'SELECT$1 TOP(' . ($from + $count) . ') WITH TIES ', $query);
       $query = '
         SELECT * FROM (
           SELECT sub2.*, ROW_NUMBER() OVER(ORDER BY sub2.__line2) AS __line3 FROM (

@@ -102,6 +102,9 @@ class SelectQuery_odbc extends SelectQuery {
       $queryString = (string) $this;
       $this->log('execute: %query with args: %args', array('%query' => (string) $queryString, '%args' => $this->getArguments()), WATCHDOG_INFO);
 
+      if (!empty($this->range)) {
+        $this->queryOptions['range'] = $this->range;
+      }
       $query = parent::execute();
       return $query;
     } catch (Exception $e) {
@@ -131,6 +134,18 @@ class SelectQuery_odbc extends SelectQuery {
     if ($this->distinct) {
       $query .= 'DISTINCT ';
     }
+
+    // RANGE
+    // There is no universal SQL standard for handling range or limit clauses.
+    // This is the SQL Server version, which has no offset capability so it has 
+    // to select from the top to the desired range and fix up the results later.
+    // The WITH TIES prevents it selecting the wrong range, at the cost of it
+    // sometimes returning an even bigger range of results
+    if (!empty($this->range)) {
+      $top = (int) $this->range['length'] + (int) $this->range['start'];
+      $query .= "TOP(" . $top . ") WITH TIES ";
+    }
+    
 
     // FIELDS and EXPRESSIONS
     $fields = array();
@@ -206,11 +221,6 @@ class SelectQuery_odbc extends SelectQuery {
         $fields[] = $field . ' ' . $direction;
       }
       $query .= implode(', ', $fields);
-    }
-
-    // RANGE
-    if (!empty($this->range)) {
-      $query = $this->connection->addRangeToQuery($query, $this->range['start'], $this->range['length']);
     }
 
     // UNION is a little odd, as the select queries to combine are passed into

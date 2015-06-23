@@ -4,6 +4,8 @@
 class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterator, DatabaseStatementInterface {
 	private $debug = false;
 
+	public $range = null;
+
 	// public $intent;
 
 	// public function intent() {
@@ -86,13 +88,23 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
 		return $queryString;
 	}
 
-	private function _fetchResults(&$statement) {
+	private function _fetchResults(&$statement, $options) {
 		$this->rowCount = $statement->rowCount();
 
 		if ($this->isSelect()) {
 			try {
 				$this->data = $statement->fetchAll(PDO::FETCH_ASSOC);
 				// $this->log('execute: Fetched %nrows rows', array('%nrows' => count($this->data)), WATCHDOG_DEBUG);
+
+				//  skip records the dumb way
+				if (!empty($options['range'])) {
+					$offset = is_numeric($options['range']['start']) ? intval($options['range']['start']) : 0;
+					$limit = is_numeric($options['range']['length']) ? intval($options['range']['length']) : null;
+					if ($offset > 0 || !is_null($limit)) {
+						// bang_syslog('Slicing data: offset %s, len %s of %s', $offset, $limit, count($this->data));
+						$this->data = array_slice($this->data, $offset, $limit);
+					}
+				}
 
 				//  decode strings if necessary
 				$this->decodeData();
@@ -104,15 +116,15 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
 				// tolerate this error and return nothing
 				$this->data = array();
 			}
+
+			$this->inferColumnNames();
+
+			if (isset($options['sqlsrv_drop_columns']))
+				$this->dropColumns($options['sqlsrv_drop_columns']);
 		}
-
-		$this->inferColumnNames();
-
-		if (isset($options['sqlsrv_drop_columns']))
-			$this->dropColumns($options['sqlsrv_drop_columns']);
 	}
 
-	private function _execute($queryString) {
+	private function _execute($queryString, $options) {
 		$statement = $this->_getStatement($queryString);
 
 		if ($statement === false) {
@@ -126,7 +138,7 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
 		}
 
 		// Fetch all the data from the reply, in order to release any lock as soon as possible.
-		$this->_fetchResults($statement);
+		$this->_fetchResults($statement, $options);
 		$statement->closeCursor();
 
 		// Initialize the first row in $this->currentRow.
@@ -140,7 +152,7 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
 		$this->_setFetchMode($options);
 		$queryString = $this->_prepareQueryString($args);
 		
-		$return = $this->_execute($queryString);
+		$return = $this->_execute($queryString, $options);
 		// unset($statement);
 
 		return $return;
