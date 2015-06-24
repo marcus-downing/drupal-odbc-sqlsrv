@@ -144,6 +144,9 @@ class SelectQuery_odbc extends SelectQuery {
     if (!empty($this->range)) {
       $top = (int) $this->range['length'] + (int) $this->range['start'];
       $query .= "TOP(" . $top . ") WITH TIES ";
+      if (empty($this->order)) {
+        $this->order["@@VERSION"] = "ASC";
+      }
     }
     
 
