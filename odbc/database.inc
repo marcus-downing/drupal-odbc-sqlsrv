@@ -996,6 +996,8 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     if ($from == 0) {
       // Easy case: just use a TOP query if we don't have to skip any rows.
       $query = preg_replace('/^\s*SELECT(\s*DISTINCT)?/Dsi', 'SELECT$1 TOP(' . $count . ') WITH TIES ', $query);
+      if (!preg_match('/ORDER BY/', $query))
+        $query = $query." ORDER BY @@VERSION ASC";
     }
     else {
       // More complex case: use a TOP query to retrieve $from + $count rows, and
@@ -1008,6 +1010,8 @@ class DatabaseConnection_odbc extends DatabaseConnection {
           ) as sub2
         ) AS sub3
         WHERE __line3 BETWEEN ' . ($from + 1) . ' AND ' . ($from + $count);
+      if (!preg_match('/ORDER BY/', $query))
+        $query = $query." ORDER BY @@VERSION ASC";
     }
 
     return $query;
