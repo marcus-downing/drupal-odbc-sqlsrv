@@ -913,7 +913,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
 
     // Add prefixes to Drupal-specific functions.
     $functions = array(
-      'SUBSTRING',
+      // 'SUBSTRING',
       'SUBSTRING_INDEX',
       'GREATEST',
       'CONCAT',
