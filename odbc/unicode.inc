@@ -12,11 +12,7 @@ function unicode_x_encode($str) {
       $encoded .= $part;
     } else {
       $pak = unpack('H*', $part);
-      $codes = str_split($pak[1], 2);
-      reset($codes);
-      foreach ($codes as $code) {
-        $encoded .= '\x'.$code;
-      }
+      $enc = preg_replace('/(..)/', '\\x$1', $pak[1], -1);
     }
   }
   return $encoded;
