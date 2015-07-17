@@ -228,7 +228,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
         break;
 
       case 'syslog':
-        $message = $this->logReplacePlaceholders($message, $variables, $replaced_keys);
+        $message = $this->logReplacePlaceholders($message, $variables);
         // bang_syslog('odbc-sqlsrv: '.$prefix.$message);
         if (empty($variables))
           bang_syslog('odbc-sqlsrv: '.$prefix.$message);
