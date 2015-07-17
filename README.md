@@ -131,38 +131,6 @@ Value                | Encoding                          | Example
 `'url'`              | URL-encoded characters            | %C2%A3
 `'quoted-printable'` | Quoted-printable email encoding   | =C2=A3
 
-Note that Unicode encoding is only available from PHP 6 upwards.
-
-```php
-  'newlines' => 'windows',
-```
-
-Whether to use Windows or Unix form for the newlines.
-
-Value                | Newline                           | Example
--------------------- | --------------------------------- | ----------
-`'windows'`          | CR LF, the Windows stanard        | \\r\\n
-`'unix'`             | LF, the Unix standard             | \\n
-
-```php
-  'newlines_method' => 'token',
-```
-
-How newlines within string parameters should be inserted into a query string.
-
-Value                | Method                            | Example
--------------------- | --------------------------------- | ----------
-`'chars'`            | Character literal codes           | `'First line'+CHAR(13)+CHAR(10)+'Second line'`
-`'variable'`         | A predefined variable             | `'First line'+@NEWLINE+'Second line'`
-`'token'`            | A token and search replace        | `REPLACE('First line^NEWLINE^Second line', '^NEWLINE^', CHAR(13)+CHAR(10))`
-`'escape'`           | Unicode escape codes              | `'First line\x0d\x0aSecond line'`
-
-```php
-  'newlines_token' => '^NEWLINE^',
-```
-
-When using the token method above, the token to use. A more obscure token reduces the chance of an accidental (or deliberate) clash, but the .
-
 ```php
   'debug' => false,
 ```

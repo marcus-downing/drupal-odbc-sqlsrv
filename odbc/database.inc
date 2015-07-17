@@ -67,35 +67,6 @@ if (!defined('ODBC_USE_TEXT')) define('ODBC_USE_TEXT', true);
 if (!defined('ODBC_ENCODING')) define('ODBC_ENCODING', 'u');
 
 /**
- * Convert newlines before storing in the database
- *
- *  'windows'  = \r\n     CR LF   Windows standard
- *  'unix'     = \n       LF      Unix standard
- *
- * This can be overridden in the connection settings with 'newlines' => (string)
- */
-if (!defined('ODBC_NEWLINES')) define('ODBC_NEWLINES', 'windows');
-
-/**
- * Use this method of writing newlines in queries
- *
- *  'chars'     =  Character codes eg  `CHAR(13)+CHAR(10)`
- *  'variable'  =  A predefined variable  `@NEWLINE`
- *  'token'     =  A temporary token inserted into the string eg  `^NEWLINE^`
- *  'escape'    =  Unicode escape codes eg  `\x0d\x0a`
- *
- * This can be overridden in the connection settings with 'newlines_method' => (string)
- */
-if (!defined('ODBC_NEWLINE_METHOD')) define('ODBC_NEWLINE_METHOD', 'token');
-
-/**
- * A temporary token to use when using the token method to write newlines in queries
- *
- * This can be overridden in the connection settings with 'newlines_token' => (string)
- */
-if (!defined('ODBC_NEWLINE_TOKEN')) define('ODBC_NEWLINE_TOKEN', '^NEWLINE^');
-
-/**
  * Deeper debugging. Do not leave this flag switch on!
  *
  * For debugging of your own code, set 'debug' => true flag on the database connection settings.
@@ -452,11 +423,6 @@ class DatabaseConnection_odbc extends DatabaseConnection {
 
     // The encoding to use for higher characters
     $this->encoding = isset($connection_options['encoding']) ? $connection_options['encoding'] : ODBC_ENCODING;
-
-    // How to encode newlines in query strings
-    $this->newlines = isset($connection_options['newlines']) ? $connection_options['newlines'] : ODBC_NEWLINES;
-    $this->newlineMethod = isset($connection_options['newline_method']) ? $connection_options['newline_method'] : ODBC_NEWLINE_METHOD;
-    $this->newlineToken = isset($connection_options['newline_token']) ? $connection_options['newline_token'] : ODBC_NEWLINE_TOKEN;
 
     // How to encode unicode
     if ($this->encoding == 'u') {
