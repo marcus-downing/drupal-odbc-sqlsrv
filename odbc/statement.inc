@@ -103,6 +103,7 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
 					if ($offset > 0 || !is_null($limit)) {
 						// bang_syslog('Slicing data: offset %s, len %s of %s', $offset, $limit, count($this->data));
 						$this->data = array_slice($this->data, $offset, $limit);
+						$this->rowCount = count($this->data);
 					}
 				}
 
@@ -159,7 +160,7 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
 	}
 
 	function isSelect() {
-		return preg_match('/^SELECT/', $this->queryString);
+		return preg_match('/^\s*SELECT/', $this->queryString);
 	}
 
 	function inferColumnNames() {
