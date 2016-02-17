@@ -146,6 +146,7 @@ class SelectQuery_odbc extends SelectQuery {
       $query .= "TOP(" . $top . ") WITH TIES ";
       if (empty($this->order)) {
         $this->order["@@VERSION"] = "ASC";
+        $this->expressions[] = array('expression' => "@@VERSION", 'alias' => '_VERSION', 'arguments' => array());
       }
     }
     
