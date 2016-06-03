@@ -81,9 +81,19 @@ class SelectQuery_odbc extends SelectQuery {
    * Detect when this query is prepared for use in a sub-query.
    */
   public function compile(DatabaseConnection $connection, QueryPlaceholderInterface $queryPlaceholder) {
+  	// Detect when this query is prepared for use in a sub-query
     $this->inSubQuery = $queryPlaceholder != $this;
     $ok = parent::compile($connection, $queryPlaceholder);
-    // if ($this->debug) { echo "<!-- Select query: compiling: "; print_r($this); echo " => "; print_r($ok); echo " -->\n"; }
+
+    // Cannot use a range without an order, so add an artificial one.
+    if (!empty($this->range)) {
+      if (empty($this->order)) {
+        $this->order["@@VERSION"] = "ASC";
+        $this->expressions[] = array('expression' => "@@VERSION", 'alias' => '_VERSION', 'arguments' => array());
+        $this->distinct = false;
+      }
+    }
+
     return $ok;
   }
 
@@ -125,7 +135,7 @@ class SelectQuery_odbc extends SelectQuery {
     if (!$this->compiled()) {
       $this->compile($this->connection, $this);
     }
-  
+
     // Create a sanitized comment string to prepend to the query.
     $comments = $this->connection->makeComment($this->comments);
 
@@ -137,19 +147,16 @@ class SelectQuery_odbc extends SelectQuery {
 
     // RANGE
     // There is no universal SQL standard for handling range or limit clauses.
-    // This is the SQL Server version, which has no offset capability so it has 
+    // This is the SQL Server version, which has no offset capability so it has
     // to select from the top to the desired range and fix up the results later.
     // The WITH TIES prevents it selecting the wrong range, at the cost of it
     // sometimes returning an even bigger range of results
     if (!empty($this->range)) {
       $top = (int) $this->range['length'] + (int) $this->range['start'];
-      $query .= "TOP(" . $top . ") WITH TIES ";
-      if (empty($this->order)) {
-        $this->order["@@VERSION"] = "ASC";
-        $this->expressions[] = array('expression' => "@@VERSION", 'alias' => '_VERSION', 'arguments' => array());
-      }
+      $query .= "TOP(" . $top . ") ";
+      if ($top > 1) $query .= "WITH TIES ";
     }
-    
+
 
     // FIELDS and EXPRESSIONS
     $fields = array();
