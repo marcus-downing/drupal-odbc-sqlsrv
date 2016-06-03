@@ -407,11 +407,11 @@ class DatabaseSchema_odbc extends DatabaseSchema {
 
   public function fieldExists($table, $field) {
     try {
-      $this->connection->query('SELECT TOP(1) [' . $field . '] FROM {' . $table . '}');
+      $this->connection->query('SELECT TOP(1) ' . $field . ' FROM {' . $table . '}')->execute();
       return true;
     }
     catch (PDOException $e) {
-      if (ODBC_LOGGING_DEBUG) echo "Exception in DatabaseSchema_odbc.fieldExists()\n";
+      // if (ODBC_LOGGING_DEBUG) echo "Exception in DatabaseSchema_odbc.fieldExists()\n";
       return false;
     }
   }
@@ -723,11 +723,11 @@ class DatabaseSchema_odbc extends DatabaseSchema {
    * @status tested
    */
   public function dropPrimaryKey($table) {
-    if (!$this->primaryKeyName($table)) {
-      return false;
-    }
+    $pkname = $this->primaryKeyName($table);
+    if (!$pkname)
+    	return false;
 
-    $this->connection->query('ALTER TABLE [{' . $table . '}] DROP CONSTRAINT {' . $table . '_pkey}');
+    $this->connection->query('ALTER TABLE [{' . $table . '}] DROP CONSTRAINT {' . $pkname . '}');
 
     $this->createTechnicalPrimaryColumn($table);
     $this->connection->query('ALTER TABLE [{' . $table . '}] ADD CONSTRAINT {' . $table . '}_pkey_technical PRIMARY KEY CLUSTERED (__pk)');
@@ -758,7 +758,7 @@ class DatabaseSchema_odbc extends DatabaseSchema {
    */
   protected function createTechnicalPrimaryColumn($table) {
     if (!$this->fieldExists($table, '__pk')) {
-      $this->connection->query('ALTER TABLE {' . $table . '} ADD __pk UNIQUEIDENTIFIER DEFAULT NEWID()');
+      $this->connection->query('ALTER TABLE {' . $table . '} ADD __pk UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID()');
     }
   }
 
