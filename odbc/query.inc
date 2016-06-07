@@ -142,7 +142,7 @@ class InsertQuery_odbc extends InsertQuery {
 
         if (!empty($transaction))
           $transaction->rollback();
-        
+
         throw $e;
       }
     }
@@ -264,11 +264,16 @@ class UpdateQuery_odbc extends UpdateQuery {
 
   public function preExecute() {
     $this->connection->preprocessExpressions($this->expressionFields, $this->group);
-    return parent::preExecute();
+    return true;
+    // return parent::preExecute();
   }
 
 
   public function execute() {
+    if (!$this->preExecute()) {
+      return null;
+    }
+
     // Rewrite the query to exclude the non-affected rows.
     // $this->excludeNonAffectedRows();
 
@@ -284,7 +289,7 @@ class UpdateQuery_odbc extends UpdateQuery {
     // Expressions take priority over literal fields, so we process those first
     // and remove any literal fields that conflict.
     $fields = $this->fields;
-   
+
     // foreach ($this->expressionFields as $field => $data) {
     //   if (!empty($data['arguments'])) {
     //     foreach ($data['arguments'] as $placeholder => $argument) {
@@ -357,7 +362,7 @@ class UpdateQuery_odbc extends UpdateQuery {
 
       if (!empty($transaction))
         $transaction->rollback();
-      
+
       throw $e;
     }
 
@@ -428,7 +433,7 @@ class TruncateQuery_odbc extends TruncateQuery {
 
       // if (!empty($transaction))
       //   $transaction->rollback();
-      
+
       throw $e;
     }
   }
@@ -473,7 +478,7 @@ class MergeQuery_odbc extends MergeQuery {
 
       // if (!empty($transaction))
       //   $transaction->rollback();
-      
+
       throw $e;
     }
   }
@@ -519,7 +524,7 @@ class MergeQuery_odbc extends MergeQuery {
      }
   }
   */
-  
+
   /*
   public function execute() {
     // We don't need INSERT or UPDATE queries to trigger additional transactions.
@@ -564,7 +569,7 @@ class MergeQuery_odbc extends MergeQuery {
 
       if (!empty($transaction))
         $transaction->rollback();
-      
+
       throw $e;
     }
 

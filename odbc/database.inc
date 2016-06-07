@@ -70,7 +70,7 @@ if (!defined('ODBC_ENCODING')) define('ODBC_ENCODING', 'u');
  * Deeper debugging. Do not leave this flag switch on!
  *
  * For debugging of your own code, set 'debug' => true flag on the database connection settings.
- * 
+ *
  * 0 = None
  * 1 = Lots of debugging spewed all over your screen
  * 2 = A totally unreasonable amount of debugging
@@ -161,7 +161,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
             case WATCHDOG_ERROR:
               $sevc = $red;
               break;
-            
+
             case WATCHDOG_WARNING:
               $sevc = $yellow;
               break;
@@ -188,7 +188,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
         if ($severity <= WATCHDOG_ERROR)
           debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
         break;
-      
+
       case 'drush':
         $message = $this->logReplacePlaceholders($message, $variables);
         $sev = $this->logSeverity($severity);
@@ -324,7 +324,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
       $this->loadModule('bang_syslog');
 
       // if (ODBC_LOGGING_DEBUG) echo "looking for WordPress module\n";
-      // $likely_wp = 
+      // $likely_wp =
       // if (file_exists(realp))
       // $matches = drupal_system_listing('/^wordpress\.module$/', 'modules', 'name', 0);
       // reset($matches);
@@ -451,7 +451,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
         $options[] = $host_option;
       }
     }
-  
+
     $options[] = 'database='.$connection_options['database'];
 
     if (isset($connection_options['odbc_driver'])) {
@@ -476,7 +476,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     $this->log('DatabaseStatement_odbc: is this log working?', null, WATCHDOG_DEBUG);
     $this->schema()->defaultSchema = $this->query("SELECT SCHEMA_NAME()")->fetchField();
 
-    // If running under Drush, fiddle with the connection settings to make sure 
+    // If running under Drush, fiddle with the connection settings to make sure
     //  `drush_valid_db_credentials` builds the right query string.
     // (but first, make sure it really is the default db)
     if (drupal_is_cli()) {
@@ -549,7 +549,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
     if (!$this->bypassQueryPreprocess) {
       $query = $this->preprocessQuery($query);
     }
-    
+
     $this->log('PDOPrepare: %query', array('%query' => $query), WATCHDOG_INFO);
     return parent::prepare($query, $options);
   }
@@ -820,7 +820,7 @@ class DatabaseConnection_odbc extends DatabaseConnection {
       $offset = $index + strlen($key);
     }
     $buf .= substr($query, $offset);
-    
+
     if (!is_null($replaced_keys)) {
       $replaced_keys = array_unique($known_keys);
     }
@@ -912,9 +912,9 @@ class DatabaseConnection_odbc extends DatabaseConnection {
    * Internal function: massage aliased expressions to accomodate edge cases that don't quite work the same on SQL Server.
    */
   public function preprocessExpressions (&$expressionFields, &$groupBy = null) {
-    if (!is_array($expressionFields)) 
+    if (!is_array($expressionFields))
       return;
-    
+
     $replace_expressions = array();
     foreach ($expressionFields as $field => $expr) {
       if ($new_expression = $this->preprocessExpression($expr['expression'])) {
@@ -938,13 +938,36 @@ class DatabaseConnection_odbc extends DatabaseConnection {
   }
 
   private function preprocessExpression($expression) {
-    if (preg_match('/.* LIKE .*/i', $expression)) {
-      if (!preg_match('/^\case when /', $expression)) {
-        return 'case when '.$expression.' then 1 else 0 end';
-      }
-    }
+  	if (is_string($expression)) {
+	    if (preg_match('/.* LIKE .*/i', $expression)) {
+	      if (!preg_match('/^\case when /', $expression)) {
+	        return 'case when '.$expression.' then 1 else 0 end';
+	      }
+	    }
+
+	    if (preg_match('/CONCAT\((.*)\)/', $expression, $match)) {
+	      $this->log('Preprocessing CONCAT', $match);
+	      $parts = split(',', $match[1]);
+	      $parts = array_map('trim', $parts);
+	      // TODO: check quote balance and coalesce unbalanced parts
+	      if (count($parts) > 2) {
+	        $alt = $this->preprocessExpression__concat_parts($parts);
+	        return $alt;
+	      }
+	    }
+	  }
+
     return false;
   }
+
+  private function preprocessExpression__concat_parts($parts) {
+    if (count($parts) == 2) {
+      return 'CONCAT('.$parts[0].', '.$parts[1].')';
+    }
+    $firstPart = array_shift($parts);
+    return 'CONCAT('.$firstPart.', '.$this->preprocessExpression__concat_parts($parts).')';
+  }
+
 
   /**
    * Internal function: add range options to a query.
