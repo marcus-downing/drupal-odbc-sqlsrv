@@ -938,24 +938,24 @@ class DatabaseConnection_odbc extends DatabaseConnection {
   }
 
   private function preprocessExpression($expression) {
-  	if (is_string($expression)) {
-	    if (preg_match('/.* LIKE .*/i', $expression)) {
-	      if (!preg_match('/^\case when /', $expression)) {
-	        return 'case when '.$expression.' then 1 else 0 end';
-	      }
-	    }
+    if (is_string($expression)) {
+      if (preg_match('/.* LIKE .*/i', $expression)) {
+        if (!preg_match('/^\case when /', $expression)) {
+          return 'case when '.$expression.' then 1 else 0 end';
+        }
+      }
 
-	    if (preg_match('/CONCAT\((.*)\)/', $expression, $match)) {
-	      $this->log('Preprocessing CONCAT', $match);
-	      $parts = split(',', $match[1]);
-	      $parts = array_map('trim', $parts);
-	      // TODO: check quote balance and coalesce unbalanced parts
-	      if (count($parts) > 2) {
-	        $alt = $this->preprocessExpression__concat_parts($parts);
-	        return $alt;
-	      }
-	    }
-	  }
+      if (preg_match('/CONCAT\((.*)\)/', $expression, $match)) {
+        $this->log('Preprocessing CONCAT', $match);
+        $parts = split(',', $match[1]);
+        $parts = array_map('trim', $parts);
+        // TODO: check quote balance and coalesce unbalanced parts
+        if (count($parts) > 2) {
+          $alt = $this->preprocessExpression__concat_parts($parts);
+          return $alt;
+        }
+      }
+    }
 
     return false;
   }
