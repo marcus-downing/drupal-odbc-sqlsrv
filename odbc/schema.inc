@@ -407,11 +407,11 @@ class DatabaseSchema_odbc extends DatabaseSchema {
 
   public function fieldExists($table, $field) {
     try {
-      $this->connection->query('SELECT TOP(1) ' . $field . ' FROM {' . $table . '}')->execute();
+      $this->connection->query('SELECT TOP(1) [' . $field . '] FROM {' . $table . '}')->execute();
       return true;
     }
     catch (PDOException $e) {
-      // if (ODBC_LOGGING_DEBUG) echo "Exception in DatabaseSchema_odbc.fieldExists()\n";
+      // if (ODBC_LOGGING_DEBUG) $this->log("Exception in DatabaseSchema_odbc.fieldExists()\n");
       return false;
     }
   }
