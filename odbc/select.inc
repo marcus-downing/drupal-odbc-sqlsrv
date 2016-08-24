@@ -38,6 +38,16 @@ class SelectQuery_odbc extends SelectQuery {
     // Execute standard pre-execution first.
     parent::preExecute($query);
 
+    if ($this->distinct) {
+      // Fields with the type 'text' are not amenable to DISTINCT in SQL Server
+      // because they're not comparable, so if we see one of them then disable 
+      // the distinct flag.
+
+      $fields = $this->getFields();
+      bang_syslog('Checking DISTINCT against fields', $fields);
+      // $this->distinct = false;
+    }
+
     if ($this->distinct || $this->group) {
       // When the query is DISTINCT or contains GROUP BY fields, all the fields
       // in the GROUP BY and ORDER BY clauses must appear in the returned
