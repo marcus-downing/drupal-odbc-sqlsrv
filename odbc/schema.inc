@@ -440,6 +440,21 @@ class DatabaseSchema_odbc extends DatabaseSchema {
       $spec['not null'] = false;
     }
 
+    // If the field is to be an identity, check for an existing primary key
+    if (!empty($spec['identity']) || $spec['type'] == 'serial') {
+      if ($primary_key_name = $this->primaryKeyName($table)) {
+        if ($this->isTechnicalPrimaryKey($primary_key_name)) {
+          // Destroy the existing technical primary key.
+          $this->connection->query('ALTER TABLE [{' . $table . '}] DROP CONSTRAINT [' . $primary_key_name . ']');
+          $this->dropUniqueKeys($table);
+          $this->dropField($table, '__pk');
+        }
+        else {
+          throw new DatabaseSchemaObjectExistsException(t("Cannot add primary key to table %table: primary key already exists.", array('%table' => $table)));
+        }
+      }
+    }
+
     // Create the field.
     $query = 'ALTER TABLE {' . $table . '} ADD ';
     $query .= $this->createFieldSql($table, $field, $this->processField($spec));
@@ -494,6 +509,88 @@ class DatabaseSchema_odbc extends DatabaseSchema {
 
     // Drop the related objects.
     $this->dropFieldRelatedObjects($table, $field);
+
+    if (($spec['type'] == 'serial' || !empty($spec['identity']))) {
+      // Changing identity columns in SQL Server is hard.
+      // We can rename the column, but we can't change the schema.
+      // Let's hope that's good enough!
+      if ($field != $field_new) {
+        // TODO compare the information schema to the spec to check whether this is actually valid.
+
+        // Rename the column.
+        $this->connection->query('EXEC sp_rename \''.$table.'.'.$field.'\', \''.$field_new.'\', \'column\'');
+
+        // Add the new keys.
+        if (isset($new_keys)) {
+          $this->recreateTableKeys($table, $new_keys);
+        }
+
+        return;
+      } else {
+        // we can't change the schema.
+        throw new Exception('Cannot change schema of identity column!');
+      }
+
+/*
+      // Replacing one identity field with another
+      // SQL Server won't let you have two identity fields at the same time,
+      // and you can't remove the IDENTITY attribute from a field once it's created,
+      // so we need to use an intermediate table to hold the data.
+
+
+      // Start by defining and creating our intermediate table
+      $field_temp = $field.'__temp';
+      $tempspec = $spec;
+      $tempspec['type'] = 'int';
+      $tempspec['not null'] = false;
+      unset($tempspec['default']);
+      unset($tempspec['identity']);
+      $this->addField($table, $field_temp, $tempspec);
+
+      // Migrate the data over.
+      // Explicitly cast the old value to the new value to avoid conversion errors.
+      $field_spec = $this->processField($spec);
+      $this->connection->query('UPDATE [{' . $table . '}] SET [' . $field_temp . '] = CAST([' . $field . '] AS ' . $field_spec['sqlsrv_type'] . ')');
+
+      // Drop the old field
+      $this->dropField($table, $field);
+
+      // If the field is declared NOT null, we have to first create it null insert
+      // the initial data then switch to NOT null.
+      if (!empty($spec['not null']) && !isset($spec['default'])) {
+        $fixnull = true;
+        $spec['not null'] = false;
+      }
+
+      // Create the actual destination field.
+      $this->addField($table, $field_new, $spec);
+
+      // Migrate the data over.
+      $this->connection->query('SET identity_insert {'. $table. '} ON');
+      // $this->connection->query('UPDATE [{' . $table . '}] SET [' . $field_new . '] = CAST([' . $field_temp . '] AS ' . $field_spec['sqlsrv_type'] . ')');
+      $this->connection->query('UPDATE [{' . $table . '}] SET [' . $field_new . '] = [' . $field_temp . ']');
+      $this->connection->query('SET identity_insert {'. $table. '} OFF');
+
+      // Switch to NOT null now.
+      if (!empty($fixnull)) {
+        $spec['not null'] = true;
+        $this->connection->query('ALTER TABLE {' . $table . '} ALTER COLUMN ' . $this->createFieldSql($table, $field_new, $this->processField($spec), true));
+      }
+
+      // Recreate the primary key.
+      if ($primary_key_sql) {
+        $this->recreatePrimaryKey($table, $primary_key_sql);
+      }
+      if ($unique_key) {
+        $fields = array();
+        $fields[] = $field;
+        $this->addUniqueKey($table, $field, $fields);
+      }
+
+      // Drop the temporary field
+      $this->dropField($table, $field_temp);
+      */
+    }
 
     // Start by renaming the current column.
     $this->connection->query('EXEC sp_rename :old, :new, :type', array(
@@ -827,6 +924,21 @@ class DatabaseSchema_odbc extends DatabaseSchema {
 
     // Try to clean-up the technical primary key if possible.
     $this->cleanUpTechnicalPrimaryColumn($table);
+  }
+
+  /**
+   * Remove ANY unique composite keys
+   */
+  public function dropUniqueKeys($table) {
+    // Fetch the list of indexes referencing this column.
+    $unique_keys = $this->connection->query('SELECT DISTINCT c.name FROM sys.columns c where object_id = OBJECT_ID(\'flagging\') and name like \'__unique_%\'', array(
+      ':table' => $this->connection->prefixTables('{' . $table . '}'),
+    ));
+    reset($unique_keys);
+    foreach ($unique_keys as $unique_key) {
+      $unique_key = str_replace('__unique_', '', $unique_key->name);
+      $this->dropUniqueKey($table, $unique_key);
+    }
   }
 
   /**
