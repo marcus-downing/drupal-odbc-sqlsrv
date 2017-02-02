@@ -217,8 +217,10 @@ class DatabaseStatement_odbc extends DatabaseStatementPrefetch implements Iterat
 		foreach ($rows as $row) {
 			$decoded_row = array();
 			foreach ($row as $key => $value) {
-				$decoded_value = unicode_x_decode($value);
-				$decoded_row[$key] = $decoded_value;
+				if (is_string($value)) {
+					$decoded_value = unicode_x_decode($value);
+					$decoded_row[$key] = $decoded_value;
+				}
 			}
 			$decoded_rows[] = $decoded_row;
 		}
